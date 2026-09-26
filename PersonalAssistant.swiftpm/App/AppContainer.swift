@@ -5,10 +5,8 @@
 
 import Foundation
 import SwiftData
-import Observation
 
 @MainActor
-@Observable
 final class AppContainer {
 
     // MARK: - Core services (constructed once)
@@ -24,47 +22,26 @@ final class AppContainer {
     let router: AppRouter
     let capabilityCenter: CapabilityCenter
 
-    // AI & Transport
-    let httpClient: HTTPClient
-    let modelRouter: ModelRouter
-    let assistantOrchestrator: AssistantOrchestrator
-
     // MARK: - Init
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
 
-        let vault = KeychainVault()
-        self.keychainVault = vault
-        let convRepo = ConversationRepository(modelContainer: modelContainer)
-        self.conversationRepository = convRepo
-        let configRepo = ConfigurationRepository(modelContainer: modelContainer)
-        self.configurationRepository = configRepo
-        let memRepo = MemoryRepository(modelContainer: modelContainer)
-        self.memoryRepository = memRepo
-        let taskRepo = TaskRepository(modelContainer: modelContainer)
-        self.taskRepository = taskRepo
-        let auditRepo = AuditRepository(modelContainer: modelContainer)
-        self.auditRepository = auditRepo
+        // One instance per service
+        self.keychainVault = KeychainVault()
+        self.conversationRepository = ConversationRepository(modelContainer: modelContainer)
+        self.configurationRepository = ConfigurationRepository(modelContainer: modelContainer)
+        self.memoryRepository = MemoryRepository(modelContainer: modelContainer)
+        self.taskRepository = TaskRepository(modelContainer: modelContainer)
+        self.auditRepository = AuditRepository(modelContainer: modelContainer)
 
         self.session = AppSession(
-            conversationRepository: convRepo,
-            configurationRepository: configRepo,
-            keychainVault: vault
+            conversationRepository: conversationRepository,
+            configurationRepository: configurationRepository,
+            keychainVault: keychainVault
         )
         self.router = AppRouter()
         self.capabilityCenter = CapabilityCenter()
-
-        let http = HTTPClient()
-        self.httpClient = http
-        let router = ModelRouter(keychainVault: vault)
-        self.modelRouter = router
-        self.assistantOrchestrator = AssistantOrchestrator(
-            conversationRepository: convRepo,
-            memoryRepository: memRepo,
-            auditRepository: auditRepo,
-            modelRouter: router
-        )
     }
 
     // MARK: - View model factories
@@ -84,9 +61,7 @@ final class AppContainer {
             session: session,
             conversationRepository: conversationRepository,
             keychainVault: keychainVault,
-            capabilityCenter: capabilityCenter,
-            orchestrator: assistantOrchestrator,
-            configurationRepository: configurationRepository
+            capabilityCenter: capabilityCenter
         )
     }
 

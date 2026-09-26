@@ -70,7 +70,7 @@ actor OpenAICompatibleProvider: AssistantModel {
     let providerID: String
     private let baseURL: URL
     private let keychainVault: KeychainVault
-    private let ownerID: UserID
+    private let ownerID: UserID?
     private let httpClient: HTTPClient
     private var modelCache: (models: [ModelDescriptor], cachedAt: Date)?
     private let catalogTTL: TimeInterval
@@ -79,7 +79,7 @@ actor OpenAICompatibleProvider: AssistantModel {
         providerID: String,
         baseURL: URL,
         keychainVault: KeychainVault,
-        ownerID: UserID,
+        ownerID: UserID? = nil,
         httpClient: HTTPClient,
         catalogTTL: TimeInterval = 86400
     ) {
@@ -97,7 +97,8 @@ actor OpenAICompatibleProvider: AssistantModel {
         if let cache = modelCache, Date().timeIntervalSince(cache.cachedAt) < catalogTTL {
             return cache.models
         }
-        let apiKey = try keychainVault.copySecret(ownerID: ownerID, providerID: providerID)
+        guard let owner = ownerID else { return [] }
+        let apiKey = try keychainVault.copySecret(ownerID: owner, providerID: providerID)
         let modelsURL = baseURL.appendingPathComponent("models")
         let response = try await httpClient.send(request: HTTPRequest(
             url: modelsURL,
@@ -135,7 +136,7 @@ actor OpenAICompatibleProvider: AssistantModel {
     // MARK: - stream()
 
     func stream(_ request: AssistantRequest) async throws -> AsyncThrowingStream<AssistantEvent, Error> {
-        let apiKey = try keychainVault.copySecret(ownerID: ownerID, providerID: providerID)
+        let apiKey = try keychainVault.copySecret(ownerID: request.owner, providerID: providerID)
 
         // Build wire request
         let messages = request.messages.map { ctx -> OAIMessage in
@@ -146,12 +147,14 @@ actor OpenAICompatibleProvider: AssistantModel {
             return OAIMessage(role: ctx.role.rawValue, content: text)
         }
 
+        let selectedModel = (providerID == "groq") ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct"
+
         let body = OAIChatCompletionRequest(
-            model: "llama3-8b-8192",  // W05 will wire model selection
+            model: selectedModel,
             messages: messages,
             stream: true,
             maxTokens: request.responseLimit,
-            tools: nil  // W05/W09 will add tool schema
+            tools: nil
         )
 
         guard let bodyData = try? JSONEncoder().encode(body) else {
@@ -174,7 +177,7 @@ actor OpenAICompatibleProvider: AssistantModel {
             Task {
                 var decoder = SSEDecoder()
                 var sequence = 0
-                continuation.yield(.started(modelID: providerID))
+                continuation.yield(.started(modelID: selectedModel))
                 do {
                     for try await chunk in httpClient.stream(request: httpRequest) {
                         let frames = try decoder.feed(chunk)
@@ -184,15 +187,28 @@ actor OpenAICompatibleProvider: AssistantModel {
                                 continuation.finish()
                                 return
                             }
-                            // Parse delta JSON
                             if let data = frame.data.data(using: .utf8),
-                               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                               let choices = json["choices"] as? [[String: Any]],
-                               let delta = choices.first?["delta"] as? [String: Any],
-                               let content = delta["content"] as? String, !content.isEmpty {
-                                continuation.yield(.textDelta(content, sequence: sequence))
-                                sequence += 1
+                               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                                if let choices = json["choices"] as? [[String: Any]],
+                                   let delta = choices.first?["delta"] as? [String: Any],
+                                   let content = delta["content"] as? String, !content.isEmpty {
+                                    continuation.yield(.textDelta(content, sequence: sequence))
+                                    sequence += 1
+                                }
+                                if let usage = json["usage"] as? [String: Any] {
+                                    let promptTokens = usage["prompt_tokens"] as? Int
+                                    let compTokens = usage["completion_tokens"] as? Int
+                                    continuation.yield(.usage(input: promptTokens, output: compTokens, estimatedCost: nil))
+                                }
                             }
+                        }
+                    }
+                    let finalFrames = try? decoder.finish()
+                    for frame in finalFrames ?? [] {
+                        if frame.data == "[DONE]" {
+                            continuation.yield(.completed(finishReason: "stop"))
+                            continuation.finish()
+                            return
                         }
                     }
                     continuation.yield(.completed(finishReason: "stop"))

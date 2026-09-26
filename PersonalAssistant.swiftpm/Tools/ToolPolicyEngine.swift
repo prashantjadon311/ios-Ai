@@ -28,9 +28,9 @@ struct ToolPolicyEngine: Sendable {
             return .deny(reason: "Tool '\(proposal.toolID)' version mismatch: expected \(definition.schemaVersion), got \(proposal.schemaVersion)")
         }
 
-        // 3. Owner must match
-        guard proposal.traceID == proposal.traceID else {  // placeholder — real owner check against trace
-            return .deny(reason: "Owner mismatch")
+        // 3. Owner and session must match
+        guard session.userID == ownerID else {
+            return .deny(reason: "Session owner mismatch")
         }
 
         // 4. Validate argument JSON (basic well-formed check — full validation in W09)
@@ -100,7 +100,10 @@ struct ToolPolicyEngine: Sendable {
     }
 
     private func humanReadable(definition: ToolDefinition, args: Data) -> String {
-        // TODO W09: extract key fields from args for display
-        return "Allow: \(definition.description)"
+        if let json = try? JSONSerialization.jsonObject(with: args) as? [String: Any], !json.isEmpty {
+            let details = json.map { "\($0.key): \($0.value)" }.sorted().joined(separator: ", ")
+            return "\(definition.name) (\(details))"
+        }
+        return "Allow \(definition.name): \(definition.description)"
     }
 }

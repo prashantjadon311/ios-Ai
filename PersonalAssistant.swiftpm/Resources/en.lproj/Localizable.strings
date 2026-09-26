@@ -1,0 +1,13 @@
+"app_name" = "Personal Assistant";
+"dashboard_title" = "Dashboard";
+"tasks_title" = "Tasks";
+"history_title" = "History";
+"configuration_title" = "Configuration";
+"settings_title" = "Settings";
+"chat_title" = "Chat";
+"ask_placeholder" = "Ask anything…";
+"save" = "Save";
+"cancel" = "Cancel";
+"delete" = "Delete";
+"approve" = "Approve";
+"reject" = "Reject";

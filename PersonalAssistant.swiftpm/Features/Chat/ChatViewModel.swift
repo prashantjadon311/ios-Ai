@@ -20,6 +20,8 @@ final class ChatViewModel {
     private let conversationRepository: ConversationRepository
     private let keychainVault: KeychainVault
     private let capabilityCenter: CapabilityCenter
+    private let orchestrator: AssistantOrchestrator
+    private let configurationRepository: ConfigurationRepository
 
     /// Active streaming task (cancellable).
     private var streamingTask: Task<Void, Never>?
@@ -29,13 +31,17 @@ final class ChatViewModel {
         session: AppSession,
         conversationRepository: ConversationRepository,
         keychainVault: KeychainVault,
-        capabilityCenter: CapabilityCenter
+        capabilityCenter: CapabilityCenter,
+        orchestrator: AssistantOrchestrator,
+        configurationRepository: ConfigurationRepository
     ) {
         self.conversationID = conversationID
         self.session = session
         self.conversationRepository = conversationRepository
         self.keychainVault = keychainVault
         self.capabilityCenter = capabilityCenter
+        self.orchestrator = orchestrator
+        self.configurationRepository = configurationRepository
     }
 
     // MARK: - Load
@@ -57,6 +63,10 @@ final class ChatViewModel {
     func send() async {
         let text = composerText.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let owner = session.currentProfile else { return }
+        if !capabilityCenter.snapshot.networkAvailable {
+            self.error = .unknown(underlying: "Network unavailable. Please check your connection.")
+            return
+        }
         composerText = ""
         error = nil
 
@@ -79,13 +89,14 @@ final class ChatViewModel {
         }
 
         // Persist user message before sending to provider (V3 §ConversationRepository)
+        let sessionToken: SessionToken
         do {
-            let session = try session.captureSession()
+            sessionToken = try session.captureSession()
             let userMsg = try await conversationRepository.appendPendingUserMessage(
                 owner: owner.id,
                 conversationID: cid,
                 parts: [.text(text)],
-                session: session
+                session: sessionToken
             )
             messages.append(userMsg)
         } catch {
@@ -93,37 +104,82 @@ final class ChatViewModel {
             return
         }
 
-        // W05/W06: AI streaming will be wired here.
-        // For now, show a placeholder assistant response for UI verification.
         isStreaming = true
         streamingText = ""
-        do {
-            let traceID = TraceID()
-            // Placeholder: real streaming in W06
-            try? await Task.sleep(for: .milliseconds(500))
-            let placeholderText = "[AI response — configure a provider in Configuration to enable live chat]"
-            let sessionToken = try session.captureSession()
-            _ = try await conversationRepository.appendAssistantCheckpoint(
-                traceID: traceID,
-                conversationID: cid,
-                ownerID: owner.id,
-                deltaText: placeholderText,
-                session: sessionToken
+
+        let traceID = TraceID()
+        let contextMessages = messages.map { msg in
+            ContextMessage(
+                role: msg.role,
+                parts: msg.parts.map { part in
+                    switch part {
+                    case .text(let t): return .text(t)
+                    case .attachment(let id): return .text("[attachment \(id.rawValue)]")
+                    case .toolResult(let id, let output, _): return .text("[tool \(id): \(output)]")
+                    }
+                },
+                provenanceHash: nil
             )
-            try await conversationRepository.finishAssistantMessage(
-                traceID: traceID,
-                ownerID: owner.id,
-                status: .complete,
-                session: sessionToken
-            )
-            messages = try await conversationRepository.pageMessages(
-                owner: owner.id, conversationID: cid, cursor: 0
-            )
-        } catch {
-            self.error = .unknown(underlying: error.localizedDescription)
         }
-        isStreaming = false
-        streamingText = ""
+
+        let request = AssistantRequest(
+            traceID: traceID,
+            owner: owner.id,
+            conversationID: cid,
+            messages: contextMessages,
+            requirements: CapabilityRequirements(needsVision: false, needsTools: false),
+            responseLimit: 2048,
+            allowedTools: [],
+            session: sessionToken
+        )
+
+        streamingTask = Task {
+            await orchestrator.executeTurn(request: request) { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .started:
+                    self.streamingText = ""
+                case .textDelta(let delta, _):
+                    self.streamingText += delta
+                case .toolProposalPending:
+                    break
+                case .usageUpdate:
+                    break
+                case .completed:
+                    if !self.streamingText.isEmpty {
+                        let finalMsg = MessageRecord(
+                            id: MessageID(),
+                            conversationID: cid,
+                            ownerID: owner.id,
+                            role: .assistant,
+                            parts: [.text(self.streamingText)],
+                            createdAt: Date()
+                        )
+                        self.messages.append(finalMsg)
+                    }
+                    self.isStreaming = false
+                    self.streamingText = ""
+                case .interrupted(_, let reason):
+                    if !self.streamingText.isEmpty {
+                        let finalMsg = MessageRecord(
+                            id: MessageID(),
+                            conversationID: cid,
+                            ownerID: owner.id,
+                            role: .assistant,
+                            parts: [.text(self.streamingText + "\n[Interrupted: \(reason)]")],
+                            createdAt: Date()
+                        )
+                        self.messages.append(finalMsg)
+                    }
+                    self.isStreaming = false
+                    self.streamingText = ""
+                case .failed(_, let err):
+                    self.error = err
+                    self.isStreaming = false
+                    self.streamingText = ""
+                }
+            }
+        }
     }
 
     // MARK: - Cancel streaming

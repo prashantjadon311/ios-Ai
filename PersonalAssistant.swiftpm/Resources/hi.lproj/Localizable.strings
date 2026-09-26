@@ -1,0 +1,13 @@
+"app_name" = "व्यक्तिगत सहायक";
+"dashboard_title" = "डैशबोर्ड";
+"tasks_title" = "कार्य";
+"history_title" = "इतिहास";
+"configuration_title" = "कॉन्फ़िगरेशन";
+"settings_title" = "सेटिंग्स";
+"chat_title" = "चैट";
+"ask_placeholder" = "कुछ भी पूछें…";
+"save" = "सहेजें";
+"cancel" = "रद्द करें";
+"delete" = "हटाएं";
+"approve" = "स्वीकार करें";
+"reject" = "अस्वीकार करें";

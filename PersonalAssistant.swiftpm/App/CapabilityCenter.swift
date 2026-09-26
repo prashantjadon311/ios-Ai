@@ -4,6 +4,21 @@
 
 import Foundation
 import Observation
+#if canImport(AVFoundation)
+import AVFoundation
+#endif
+#if canImport(AVFAudio)
+import AVFAudio
+#endif
+#if canImport(UserNotifications)
+import UserNotifications
+#endif
+#if canImport(Speech)
+import Speech
+#endif
+#if canImport(Network)
+import Network
+#endif
 
 /// Reason a feature check was triggered.
 enum RefreshReason: Sendable {
@@ -106,11 +121,23 @@ final class CapabilityCenter {
     // MARK: - Private checkers
 
     private func checkNetworkAvailability() async -> Bool {
-        true
+        #if canImport(Network)
+        return await withCheckedContinuation { continuation in
+            let monitor = NWPathMonitor()
+            let queue = DispatchQueue(label: "NetworkCheck")
+            monitor.pathUpdateHandler = { path in
+                monitor.cancel()
+                continuation.resume(returning: path.status == .satisfied)
+            }
+            monitor.start(queue: queue)
+        }
+        #else
+        return true
+        #endif
     }
 
     private func checkMicrophonePermission() async -> Bool {
-        #if canImport(AVFoundation)
+        #if canImport(AVFAudio)
         if #available(iOS 18.0, *) {
             return await withCheckedContinuation { continuation in
                 AVAudioApplication.requestRecordPermission { granted in
@@ -134,7 +161,7 @@ final class CapabilityCenter {
 
     private func checkFoundationModelsAvailability() -> Bool {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 18.0, *) {
             return true
         }
         #endif
@@ -143,9 +170,9 @@ final class CapabilityCenter {
 
     private func availableSpeechLocales() -> [String] {
         #if canImport(Speech)
-        return ["en-US"]
+        return SFSpeechRecognizer.supportedLocales().map { $0.identifier }
         #else
-        return []
+        return ["en-US"]
         #endif
     }
 }
