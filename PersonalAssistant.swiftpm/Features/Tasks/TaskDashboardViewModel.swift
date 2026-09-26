@@ -43,6 +43,8 @@ final class TaskDashboardViewModel {
         updated.updatedAt = Date()
         do {
             try await taskRepository.upsertDefinition(updated, expectedRevision: task.revision)
+            let reminderScheduler = LocalReminderScheduler()
+            await reminderScheduler.cancelReminder(taskID: task.id)
             await load()
         } catch {
             self.error = .unknown(underlying: error.localizedDescription)

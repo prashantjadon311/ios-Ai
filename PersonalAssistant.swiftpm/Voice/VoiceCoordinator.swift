@@ -29,13 +29,23 @@ final class VoiceCoordinator {
 
     private let capabilityCenter: CapabilityCenter
     private let commandBus: ApplicationCommandBus
+    private let microphoneCapture: MicrophoneCapture
+    private let speechRecognizer: LegacySpeechRecognizer
 
     // Monotonically increasing session ID — new on every start (B07)
     private var sessionGeneration: Int = 0
+    private var streamTask: Task<Void, Never>?
 
-    init(capabilityCenter: CapabilityCenter, commandBus: ApplicationCommandBus) {
+    init(
+        capabilityCenter: CapabilityCenter,
+        commandBus: ApplicationCommandBus,
+        microphoneCapture: MicrophoneCapture = MicrophoneCapture(),
+        speechRecognizer: LegacySpeechRecognizer = LegacySpeechRecognizer()
+    ) {
         self.capabilityCenter = capabilityCenter
         self.commandBus = commandBus
+        self.microphoneCapture = microphoneCapture
+        self.speechRecognizer = speechRecognizer
     }
 
     // MARK: - Begin (must be from direct user intent only — B07)
@@ -53,27 +63,53 @@ final class VoiceCoordinator {
         // New monotonically-increasing session ID
         sessionGeneration += 1
         currentSessionID = VoiceSessionID()
-        let capturedSessionID = currentSessionID
+        let capturedGeneration = sessionGeneration
 
         state = .capturing
+        lastTranscript = nil
 
-        // Real STT implementation in W07
-        // Placeholder for W01-W03 compilation
-        try? await Task.sleep(for: .milliseconds(100))
+        do {
+            #if canImport(AVFAudio) && canImport(Speech)
+            let recognizer = self.speechRecognizer
+            try await microphoneCapture.startCapture { buffer in
+                Task {
+                    await recognizer.appendBuffer(buffer)
+                }
+            }
+            #else
+            try await microphoneCapture.startCapture()
+            #endif
 
-        // Verify session still valid (B07 stale callback guard)
-        guard currentSessionID == capturedSessionID, state == .capturing else { return }
-
-        state = .idle
+            let stream = try await speechRecognizer.startRecognition(locale: Locale.current)
+            streamTask = Task { [weak self] in
+                do {
+                    for try await text in stream {
+                        guard let self = self else { break }
+                        guard self.sessionGeneration == capturedGeneration else { break }
+                        self.lastTranscript = text
+                    }
+                } catch {
+                    guard let self = self, self.sessionGeneration == capturedGeneration else { return }
+                    self.stop()
+                }
+            }
+        } catch {
+            state = .unavailable(reason: error.localizedDescription)
+            await microphoneCapture.stopCapture()
+            await speechRecognizer.stopRecognition()
+        }
     }
 
     // MARK: - Stop (B07: stop TTS before capture, release audio session)
 
     func stop() {
-        let wasActive = state != .idle && state != .unavailable(reason: "")
         state = .idle
-        lastTranscript = nil
-        // Release AVAudioSession — real implementation in W07
+        streamTask?.cancel()
+        streamTask = nil
+        Task {
+            await microphoneCapture.stopCapture()
+            await speechRecognizer.stopRecognition()
+        }
     }
 
     // MARK: - Handle interruption (B07)

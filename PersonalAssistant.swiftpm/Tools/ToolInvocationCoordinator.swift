@@ -30,11 +30,11 @@ actor ToolInvocationCoordinator {
         // 2. Perform execution with error catch
         do {
             let result = try await executor(authorizedCall.canonicalArguments)
-            await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .completed, result: result)
+            await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .succeeded, result: result)
             return result
         } catch is CancellationError {
             await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .ambiguous, result: "Cancelled mid-execution")
-            throw AppError.sideEffectAmbiguous(operation: authorizedCall.toolID)
+            throw AppError.sideEffectAmbiguous(operationKey: authorizedCall.toolID)
         } catch {
             await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .failed, result: error.localizedDescription)
             throw error

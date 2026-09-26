@@ -42,7 +42,7 @@ struct MemoryItem: Identifiable, Codable, Sendable, Hashable {
         self.expiresAt = expiresAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.isDeleted = false
+        self.isDeleted = isDeleted
     }
 
     /// Is this memory currently active (verified, not expired, not deleted)?

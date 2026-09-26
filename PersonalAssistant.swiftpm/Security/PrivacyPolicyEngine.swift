@@ -5,12 +5,16 @@
 import Foundation
 
 struct PrivacyPolicyEngine: Sendable {
-    static func checkEgressAllowed(privacyMode: PrivacyMode, dataClass: PrivacyClass) throws {
+    static func checkEgressAllowed(
+        route: String,
+        privacyMode: PrivacyMode,
+        dataClass: PrivacyClass
+    ) throws {
         if privacyMode == .privateOnly {
-            throw AppError.privacyDenied(reason: "External data transfer is strictly blocked in Private Only mode")
+            throw AppError.privacyDenied(route: route, requiredClass: dataClass)
         }
-        if privacyMode == .standard && dataClass == .secret {
-            throw AppError.privacyDenied(reason: "Secrets cannot be transmitted to external models")
+        if privacyMode == .cloudAllowed && dataClass == .secret {
+            throw AppError.privacyDenied(route: route, requiredClass: .secret)
         }
     }
 }

@@ -13,22 +13,26 @@ actor MicrophoneCapture {
     #endif
     private(set) var isCapturing: Bool = false
 
-    func startCapture() throws {
-        #if canImport(AVFAudio)
+    #if canImport(AVFAudio)
+    func startCapture(onBuffer: @Sendable @escaping (AVAudioPCMBuffer) -> Void = { _ in }) throws {
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            // Audio buffer tapped
+            onBuffer(buffer)
         }
 
         engine.prepare()
         try engine.start()
         self.audioEngine = engine
         self.isCapturing = true
-        #endif
     }
+    #else
+    func startCapture() throws {
+        self.isCapturing = true
+    }
+    #endif
 
     func stopCapture() {
         #if canImport(AVFAudio)

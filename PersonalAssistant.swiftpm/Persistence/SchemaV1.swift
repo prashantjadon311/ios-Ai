@@ -21,6 +21,7 @@ enum SchemaV1: VersionedSchema {
             StoredApprovalRequest.self,
             StoredAuditEvent.self,
             StoredAppPreference.self,
+            StoredAttachment.self,
         ]
     }
 }

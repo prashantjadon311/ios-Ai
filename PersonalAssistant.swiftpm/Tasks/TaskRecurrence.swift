@@ -13,7 +13,7 @@ struct TaskRecurrenceCalculator: Sendable {
     /// - Never schedules duplicate occurrences.
     static func nextDate(
         after current: Date,
-        recurrence: RecurrenceRule,
+        recurrence: TaskRecurrence,
         targetHour: Int? = nil,
         targetMinute: Int? = nil,
         calendar: Calendar = Calendar.current,

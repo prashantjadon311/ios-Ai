@@ -1,4 +1,6 @@
 // Features/Tasks/TaskDetailView.swift
+// Displays task definition details and recurrence schedule.
+
 import SwiftUI
 
 struct TaskDetailView: View {
@@ -9,8 +11,12 @@ struct TaskDetailView: View {
             Section("Task") {
                 Text(task.title)
                     .font(.headline)
-                if let schedule = task.scheduleTime {
-                    LabeledContent("Scheduled For", value: DateFormattingHelpers.mediumDate(schedule))
+                if !task.taskDescription.isEmpty {
+                    Text(task.taskDescription)
+                        .font(.body)
+                }
+                if let schedule = task.schedule {
+                    LabeledContent("Scheduled For", value: DateFormattingHelpers.mediumDate(schedule.fireDate))
                 }
             }
         }

@@ -6,6 +6,7 @@ import Observation
 @Observable
 final class ApprovalViewModel {
     var pendingRequests: [ApprovalRequest] = []
+    var errorMessage: String?
     private let coordinator: ApprovalCoordinator
 
     init(coordinator: ApprovalCoordinator = ApprovalCoordinator()) {
@@ -16,12 +17,18 @@ final class ApprovalViewModel {
         pendingRequests = await coordinator.allPending()
     }
 
-    func approve(requestID: ApprovalID) async {
-        _ = try? await coordinator.approve(requestID: requestID)
-        await load()
+    func approve(requestID: ApprovalID, currentSession: SessionToken? = nil) async {
+        errorMessage = nil
+        do {
+            _ = try await coordinator.approve(requestID: requestID, currentSession: currentSession)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func reject(requestID: ApprovalID) async {
+        errorMessage = nil
         await coordinator.reject(requestID: requestID)
         await load()
     }

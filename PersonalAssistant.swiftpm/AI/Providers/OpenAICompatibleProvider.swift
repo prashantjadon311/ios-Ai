@@ -147,7 +147,7 @@ actor OpenAICompatibleProvider: AssistantModel {
             return OAIMessage(role: ctx.role.rawValue, content: text)
         }
 
-        let selectedModel = (providerID == "groq") ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct"
+        let selectedModel = request.modelOverride ?? ((providerID == "groq") ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct")
 
         let body = OAIChatCompletionRequest(
             model: selectedModel,

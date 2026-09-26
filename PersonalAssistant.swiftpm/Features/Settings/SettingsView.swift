@@ -88,7 +88,12 @@ struct SettingsView: View {
                 } label: {
                     Label("Clear All Data", systemImage: "trash.fill")
                 }
-                .accessibilityLabel("Clear all app data")
+                .disabled(true)
+                .accessibilityLabel("Clear all app data (Disabled)")
+            } footer: {
+                Text("Bulk data wipe is disabled to prevent accidental data loss. Individual items can be managed or deleted from their respective views.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             // About
@@ -97,14 +102,6 @@ struct SettingsView: View {
                     AboutView()
                 }
             }
-        }
-        .alert("Clear All Data?", isPresented: $showDeleteAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                // W12 — full data deletion implementation
-            }
-        } message: {
-            Text("This will permanently delete all conversations, tasks, memories and settings. API keys must be re-entered.")
         }
     }
 }

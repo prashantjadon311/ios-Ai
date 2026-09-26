@@ -28,11 +28,11 @@ actor TaskEngineActor {
     }
 
     func scheduleTask(task: TaskDefinition) async throws {
-        if let schedule = task.scheduleTime {
+        if let schedule = task.schedule {
             try await reminderScheduler.scheduleReminder(
                 taskID: task.id,
                 title: task.title,
-                fireDate: schedule
+                fireDate: schedule.fireDate
             )
         }
     }

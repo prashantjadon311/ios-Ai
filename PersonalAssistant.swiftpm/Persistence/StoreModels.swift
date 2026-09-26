@@ -383,3 +383,37 @@ final class StoredAppPreference {
         self.updatedAt = updatedAt
     }
 }
+
+// MARK: - Stored Attachment
+
+@Model
+final class StoredAttachment {
+    @Attribute(.unique) var id: UUID
+    var ownerID: UUID
+    var filename: String
+    var mimeType: String
+    var byteSize: Int
+    var storageURLString: String
+    var extractedText: String?
+    var createdAt: Date
+
+    init(
+        id: UUID,
+        ownerID: UUID,
+        filename: String,
+        mimeType: String,
+        byteSize: Int,
+        storageURLString: String = "",
+        extractedText: String? = nil,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.ownerID = ownerID
+        self.filename = filename
+        self.mimeType = mimeType
+        self.byteSize = byteSize
+        self.storageURLString = storageURLString
+        self.extractedText = extractedText
+        self.createdAt = createdAt
+    }
+}

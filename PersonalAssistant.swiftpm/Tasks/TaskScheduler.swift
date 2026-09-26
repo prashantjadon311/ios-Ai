@@ -5,21 +5,23 @@
 import Foundation
 
 struct TaskScheduler: Sendable {
-    static func makeOccurrenceKey(taskID: TaskID, scheduledDate: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return "\(taskID.rawValue.uuidString)_\(formatter.string(from: scheduledDate))"
+    static func makeOccurrenceKey(taskID: TaskID, revision: Int, occurrenceID: UUID = UUID()) -> TaskOccurrenceKey {
+        TaskOccurrenceKey(
+            taskID: taskID,
+            definitionRevision: revision,
+            scheduledOccurrenceID: occurrenceID
+        )
     }
 
     static func scheduleNextRun(
         for task: TaskDefinition,
         after lastDate: Date = Date()
-    ) -> (occurrenceKey: String, scheduledDate: Date)? {
-        guard let rule = task.recurrenceRule else { return nil }
-        guard let next = TaskRecurrenceCalculator.nextDate(after: lastDate, recurrence: rule) else {
+    ) -> (occurrenceKey: TaskOccurrenceKey, scheduledDate: Date)? {
+        guard let recurrence = task.recurrence else { return nil }
+        guard let next = TaskRecurrenceCalculator.nextDate(after: lastDate, recurrence: recurrence) else {
             return nil
         }
-        let key = makeOccurrenceKey(taskID: task.id, scheduledDate: next)
+        let key = makeOccurrenceKey(taskID: task.id, revision: task.revision)
         return (key, next)
     }
 }

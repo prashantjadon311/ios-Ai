@@ -114,11 +114,12 @@ final class ChatViewModel {
                 parts: msg.parts.map { part in
                     switch part {
                     case .text(let t): return .text(t)
-                    case .attachment(let id): return .text("[attachment \(id.rawValue)]")
-                    case .toolResult(let id, let output, _): return .text("[tool \(id): \(output)]")
+                    case .attachment(let id): return .attachment(id)
+                    case .toolResult(let id, let output): return .toolResult(invocationID: id, summary: output)
                     }
                 },
-                provenanceHash: nil
+                source: msg.source,
+                sensitivity: msg.sensitivity
             )
         }
 
@@ -137,7 +138,7 @@ final class ChatViewModel {
             await orchestrator.executeTurn(request: request) { [weak self] event in
                 guard let self else { return }
                 switch event {
-                case .started:
+                case .started(let tid, let modelID):
                     self.streamingText = ""
                 case .textDelta(let delta, _):
                     self.streamingText += delta
@@ -145,29 +146,41 @@ final class ChatViewModel {
                     break
                 case .usageUpdate:
                     break
-                case .completed:
+                case .completed(let tid, let reason):
                     if !self.streamingText.isEmpty {
                         let finalMsg = MessageRecord(
                             id: MessageID(),
                             conversationID: cid,
                             ownerID: owner.id,
+                            traceID: traceID,
                             role: .assistant,
                             parts: [.text(self.streamingText)],
-                            createdAt: Date()
+                            source: .assistantGenerated,
+                            sensitivity: .personal,
+                            status: .complete,
+                            createdAt: Date(),
+                            updatedAt: Date(),
+                            sequenceNumber: self.messages.count
                         )
                         self.messages.append(finalMsg)
                     }
                     self.isStreaming = false
                     self.streamingText = ""
-                case .interrupted(_, let reason):
+                case .interrupted(let tid, let reason):
                     if !self.streamingText.isEmpty {
                         let finalMsg = MessageRecord(
                             id: MessageID(),
                             conversationID: cid,
                             ownerID: owner.id,
+                            traceID: traceID,
                             role: .assistant,
                             parts: [.text(self.streamingText + "\n[Interrupted: \(reason)]")],
-                            createdAt: Date()
+                            source: .assistantGenerated,
+                            sensitivity: .personal,
+                            status: .interrupted,
+                            createdAt: Date(),
+                            updatedAt: Date(),
+                            sequenceNumber: self.messages.count
                         )
                         self.messages.append(finalMsg)
                     }

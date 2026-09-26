@@ -15,14 +15,15 @@ actor AttachmentRepository: ModelActor {
         self.modelExecutor = DefaultSerialModelExecutor(modelContext: context)
     }
 
-    func saveAttachment(_ attachment: Attachment) throws {
+    func saveAttachment(_ attachment: Attachment, extractedText: String? = nil) throws {
         let stored = StoredAttachment(
             id: attachment.id.rawValue,
             ownerID: attachment.ownerID.rawValue,
             filename: attachment.filename,
             mimeType: attachment.mimeType,
             byteSize: attachment.byteSize,
-            extractedText: attachment.extractedText,
+            storageURLString: attachment.storageURL.absoluteString,
+            extractedText: extractedText,
             createdAt: attachment.createdAt
         )
         modelContext.insert(stored)

@@ -16,6 +16,7 @@ struct AssistantRequest: Sendable {
     let responseLimit: Int
     let allowedTools: [ToolDefinition]
     let session: SessionToken
+    let modelOverride: String?
 
     init(
         traceID: TraceID,
@@ -25,7 +26,8 @@ struct AssistantRequest: Sendable {
         requirements: CapabilityRequirements,
         responseLimit: Int = 2048,
         allowedTools: [ToolDefinition] = [],
-        session: SessionToken
+        session: SessionToken,
+        modelOverride: String? = nil
     ) {
         self.traceID = traceID
         self.owner = owner
@@ -35,6 +37,7 @@ struct AssistantRequest: Sendable {
         self.responseLimit = responseLimit
         self.allowedTools = allowedTools
         self.session = session
+        self.modelOverride = modelOverride
     }
 }
 

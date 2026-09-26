@@ -1,4 +1,7 @@
 // Features/Assistant/AssistantProfileView.swift
+// Displays active and configured assistant profiles (Maya and Saar).
+// Uses canonical AssistantProfile (avatarRole, displayName, voiceSettings).
+
 import SwiftUI
 
 struct AssistantProfileView: View {
@@ -10,11 +13,11 @@ struct AssistantProfileView: View {
             Section("Active Assistant") {
                 if let assistant = session.activeAssistant {
                     HStack {
-                        AvatarView(state: .idle, identity: assistant.avatarType == .saar ? .saar : .maya, size: 50)
+                        AvatarView(state: .idle, identity: assistant.avatarRole == .saar ? .saar : .maya, size: 50)
                         VStack(alignment: .leading) {
-                            Text(assistant.name)
+                            Text(assistant.displayName)
                                 .font(.headline)
-                            Text(assistant.voiceIdentifier)
+                            Text(assistant.voiceSettings.voiceIdentifier ?? "Default Voice")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -25,7 +28,7 @@ struct AssistantProfileView: View {
             Section("All Profiles") {
                 ForEach(session.assistantProfiles, id: \.id) { profile in
                     HStack {
-                        Text(profile.name)
+                        Text(profile.displayName)
                         Spacer()
                         if profile.id == session.activeAssistant?.id {
                             Image(systemName: "checkmark")

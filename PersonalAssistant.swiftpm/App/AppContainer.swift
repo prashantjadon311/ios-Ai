@@ -5,8 +5,10 @@
 
 import Foundation
 import SwiftData
+import Observation
 
 @MainActor
+@Observable
 final class AppContainer {
 
     // MARK: - Core services (constructed once)
@@ -22,26 +24,72 @@ final class AppContainer {
     let router: AppRouter
     let capabilityCenter: CapabilityCenter
 
+    // AI & Transport
+    let httpClient: HTTPClient
+    let modelRouter: ModelRouter
+    let assistantOrchestrator: AssistantOrchestrator
+
     // MARK: - Init
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
 
-        // One instance per service
-        self.keychainVault = KeychainVault()
-        self.conversationRepository = ConversationRepository(modelContainer: modelContainer)
-        self.configurationRepository = ConfigurationRepository(modelContainer: modelContainer)
-        self.memoryRepository = MemoryRepository(modelContainer: modelContainer)
-        self.taskRepository = TaskRepository(modelContainer: modelContainer)
-        self.auditRepository = AuditRepository(modelContainer: modelContainer)
+        let vault = KeychainVault()
+        self.keychainVault = vault
+        let convRepo = ConversationRepository(modelContainer: modelContainer)
+        self.conversationRepository = convRepo
+        let configRepo = ConfigurationRepository(modelContainer: modelContainer)
+        self.configurationRepository = configRepo
+        let memRepo = MemoryRepository(modelContainer: modelContainer)
+        self.memoryRepository = memRepo
+        let taskRepo = TaskRepository(modelContainer: modelContainer)
+        self.taskRepository = taskRepo
+        let auditRepo = AuditRepository(modelContainer: modelContainer)
+        self.auditRepository = auditRepo
 
         self.session = AppSession(
-            conversationRepository: conversationRepository,
-            configurationRepository: configurationRepository,
-            keychainVault: keychainVault
+            conversationRepository: convRepo,
+            configurationRepository: configRepo,
+            keychainVault: vault
         )
         self.router = AppRouter()
         self.capabilityCenter = CapabilityCenter()
+
+        let http = HTTPClient()
+        self.httpClient = http
+        let router = ModelRouter(keychainVault: vault)
+
+        if let groqURL = URL(string: "https://api.groq.com/openai/v1") {
+            let groqProvider = OpenAICompatibleProvider(
+                providerID: "groq",
+                baseURL: groqURL,
+                keychainVault: vault,
+                httpClient: http
+            )
+            Task {
+                await router.register(provider: groqProvider)
+            }
+        }
+        if let openRouterURL = URL(string: "https://openrouter.ai/api/v1") {
+            let openRouterProvider = OpenAICompatibleProvider(
+                providerID: "openRouter",
+                baseURL: openRouterURL,
+                keychainVault: vault,
+                httpClient: http
+            )
+            Task {
+                await router.register(provider: openRouterProvider)
+            }
+        }
+
+        self.modelRouter = router
+        self.assistantOrchestrator = AssistantOrchestrator(
+            conversationRepository: convRepo,
+            configurationRepository: configRepo,
+            memoryRepository: memRepo,
+            auditRepository: auditRepo,
+            modelRouter: router
+        )
     }
 
     // MARK: - View model factories
@@ -61,7 +109,9 @@ final class AppContainer {
             session: session,
             conversationRepository: conversationRepository,
             keychainVault: keychainVault,
-            capabilityCenter: capabilityCenter
+            capabilityCenter: capabilityCenter,
+            orchestrator: assistantOrchestrator,
+            configurationRepository: configurationRepository
         )
     }
 

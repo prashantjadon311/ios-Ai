@@ -54,4 +54,9 @@ struct AttachmentValidator: Sendable {
             }
         }
     }
+
+    /// Convenience alias matching expectedMime caller syntax.
+    static func validate(data: Data, expectedMime: String) throws {
+        try validate(data: data, claimedMime: expectedMime)
+    }
 }

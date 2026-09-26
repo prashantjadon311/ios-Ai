@@ -17,7 +17,7 @@ actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
         AsyncThrowingStream { continuation in
             #if canImport(Speech)
             guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
-                continuation.finish(throwing: AppError.unsupportedCapability(name: "Speech recognition unavailable for locale \(locale.identifier)"))
+                continuation.finish(throwing: AppError.unsupportedCapability("Speech recognition unavailable for locale \(locale.identifier)"))
                 return
             }
 
@@ -38,7 +38,7 @@ actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
                 }
             }
             #else
-            continuation.finish(throwing: AppError.unsupportedCapability(name: "Speech framework not available"))
+            continuation.finish(throwing: AppError.unsupportedCapability("Speech framework not available"))
             #endif
         }
     }
@@ -51,4 +51,10 @@ actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
         recognitionTask = nil
         #endif
     }
+
+    #if canImport(Speech) && canImport(AVFAudio)
+    func appendBuffer(_ buffer: AVAudioPCMBuffer) {
+        recognitionRequest?.append(buffer)
+    }
+    #endif
 }

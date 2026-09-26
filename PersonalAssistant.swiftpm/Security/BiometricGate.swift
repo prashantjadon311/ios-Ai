@@ -1,6 +1,7 @@
 // Security/BiometricGate.swift
 // LocalAuthentication biometric authentication gate (FaceID / TouchID).
 // Per V3 §Security/BiometricGate.swift blueprint.
+// Fails closed on unsupported platforms and authentication failures.
 
 import Foundation
 #if canImport(LocalAuthentication)
@@ -17,7 +18,8 @@ actor BiometricGate {
         }
         return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
         #else
-        return true
+        // Fail closed per P0-20
+        return false
         #endif
     }
 }
