@@ -88,8 +88,9 @@ jobs:
         run: |
           xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-scheme-discovery.log"
           build_success=false
-          for dest in "generic/platform=iOS Simulator" "generic/platform=iOS" "platform=macOS,variant=Mac Catalyst"; do
+          for dest in "platform=macOS,variant=Mac Catalyst" "generic/platform=iOS" "generic/platform=iOS Simulator"; do
             echo "Attempting compilation with destination: $dest"
+            rm -rf "$RUNNER_TEMP/PersonalAssistant.xcresult"
             if xcodebuild -scheme PersonalAssistant \
               -destination "$dest" \
               -resultBundlePath "$RUNNER_TEMP/PersonalAssistant.xcresult" \
