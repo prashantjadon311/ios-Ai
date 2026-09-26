@@ -29,6 +29,12 @@ final class AppContainer {
     let modelRouter: ModelRouter
     let assistantOrchestrator: AssistantOrchestrator
 
+    // Tools & Security
+    let toolReceiptStore: ToolReceiptStore
+    let toolPolicyEngine: ToolPolicyEngine
+    let toolInvocationCoordinator: ToolInvocationCoordinator
+    let approvalCoordinator: ApprovalCoordinator
+
     // MARK: - Init
 
     init(modelContainer: ModelContainer) {
@@ -57,8 +63,8 @@ final class AppContainer {
 
         let http = HTTPClient()
         self.httpClient = http
-        let router = ModelRouter(keychainVault: vault)
 
+        var initialProviders: [any AssistantModel] = []
         if let groqURL = URL(string: "https://api.groq.com/openai/v1") {
             let groqProvider = OpenAICompatibleProvider(
                 providerID: "groq",
@@ -66,9 +72,7 @@ final class AppContainer {
                 keychainVault: vault,
                 httpClient: http
             )
-            Task {
-                await router.register(provider: groqProvider)
-            }
+            initialProviders.append(groqProvider)
         }
         if let openRouterURL = URL(string: "https://openrouter.ai/api/v1") {
             let openRouterProvider = OpenAICompatibleProvider(
@@ -77,12 +81,12 @@ final class AppContainer {
                 keychainVault: vault,
                 httpClient: http
             )
-            Task {
-                await router.register(provider: openRouterProvider)
-            }
+            initialProviders.append(openRouterProvider)
         }
 
+        let router = ModelRouter(keychainVault: vault, initialProviders: initialProviders)
         self.modelRouter = router
+
         self.assistantOrchestrator = AssistantOrchestrator(
             conversationRepository: convRepo,
             configurationRepository: configRepo,
@@ -90,6 +94,21 @@ final class AppContainer {
             auditRepository: auditRepo,
             modelRouter: router
         )
+
+        let receiptStore = ToolReceiptStore(modelContainer: modelContainer)
+        self.toolReceiptStore = receiptStore
+        let policyEngine = ToolPolicyEngine()
+        self.toolPolicyEngine = policyEngine
+        self.toolInvocationCoordinator = ToolInvocationCoordinator(
+            receiptStore: receiptStore,
+            policyEngine: policyEngine
+        )
+        self.approvalCoordinator = ApprovalCoordinator()
+
+        // Reconcile any orphaned PREPARED tool operations from previous run
+        Task {
+            await receiptStore.reconcileStartup()
+        }
     }
 
     // MARK: - View model factories
@@ -103,7 +122,7 @@ final class AppContainer {
         )
     }
 
-    func makeChatViewModel(conversationID: ConversationID) -> ChatViewModel {
+    func makeChatViewModel(conversationID: ConversationID? = nil) -> ChatViewModel {
         ChatViewModel(
             conversationID: conversationID,
             session: session,
@@ -138,6 +157,10 @@ final class AppContainer {
             keychainVault: keychainVault,
             capabilityCenter: capabilityCenter
         )
+    }
+
+    func makeApprovalViewModel() -> ApprovalViewModel {
+        ApprovalViewModel(coordinator: approvalCoordinator)
     }
 
     // MARK: - Preview container (DEBUG only)

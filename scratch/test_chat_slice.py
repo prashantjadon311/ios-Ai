@@ -15,7 +15,7 @@ import sys
 import re
 from pathlib import Path
 
-ROOT = Path("/home/thakur/projects/git/AI-Other/ios/ios-Ai")
+ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "PersonalAssistant.swiftpm"
 
 def read(rel_path: str) -> str:

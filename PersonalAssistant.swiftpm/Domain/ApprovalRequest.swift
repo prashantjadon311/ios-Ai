@@ -41,8 +41,10 @@ struct ApprovalRequest: Identifiable, Codable, Sendable, Hashable {
     let humanReadableSummary: String
     /// Exact recipient: URL, service name, account category.
     let recipient: String
-    /// Data classes that will be accessed or sent.
-    let dataClasses: [PrivacyClass]
+    /// Canonical arguments bytes reviewed by the user.
+    let canonicalArguments: Data
+    /// Session generation when approval was created.
+    let sessionGeneration: UUID
     let expiresAt: Date
     var status: ApprovalStatus
     let createdAt: Date
@@ -60,6 +62,8 @@ struct ApprovalRequest: Identifiable, Codable, Sendable, Hashable {
         humanReadableSummary: String,
         recipient: String,
         dataClasses: [PrivacyClass],
+        canonicalArguments: Data = Data(),
+        sessionGeneration: UUID = UUID(),
         expiresAt: Date,
         status: ApprovalStatus = .pending,
         createdAt: Date = Date(),
@@ -76,6 +80,8 @@ struct ApprovalRequest: Identifiable, Codable, Sendable, Hashable {
         self.humanReadableSummary = humanReadableSummary
         self.recipient = recipient
         self.dataClasses = dataClasses
+        self.canonicalArguments = canonicalArguments
+        self.sessionGeneration = sessionGeneration
         self.expiresAt = expiresAt
         self.status = status
         self.createdAt = createdAt

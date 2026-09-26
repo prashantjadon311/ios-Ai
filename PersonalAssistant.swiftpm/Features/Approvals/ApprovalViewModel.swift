@@ -17,10 +17,14 @@ final class ApprovalViewModel {
         pendingRequests = await coordinator.allPending()
     }
 
-    func approve(requestID: ApprovalID, currentSession: SessionToken? = nil) async {
+    func approve(request: ApprovalRequest, currentSession: SessionToken) async {
         errorMessage = nil
         do {
-            _ = try await coordinator.approve(requestID: requestID, currentSession: currentSession)
+            _ = try await coordinator.approve(
+                requestID: request.id,
+                expectedPayloadHash: request.payloadHash,
+                currentSession: currentSession
+            )
             await load()
         } catch {
             errorMessage = error.localizedDescription

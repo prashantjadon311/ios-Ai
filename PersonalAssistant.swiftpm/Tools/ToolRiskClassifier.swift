@@ -7,11 +7,11 @@ import Foundation
 struct ToolRiskClassifier: Sendable {
     static func classify(toolID: String) -> ToolRiskLevel {
         switch toolID {
-        case "open_url", "search_history", "read_attachment":
+        case "search_history", "searchHistory", "read_attachment", "readAttachment":
             return .low
-        case "create_task", "save_note", "contacts_lookup":
+        case "create_task", "createTask", "createTaskNote", "save_note", "saveNote", "contacts_lookup", "searchContacts":
             return .medium
-        case "create_reminder", "calendar_create":
+        case "open_url", "openURL", "create_reminder", "createReminder", "calendar_create", "createCalendarEvent":
             return .high
         default:
             return .high

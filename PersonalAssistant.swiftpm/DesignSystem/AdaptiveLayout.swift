@@ -1,6 +1,7 @@
 // DesignSystem/AdaptiveLayout.swift
 // Compact (iPhone TabView) and regular (iPad NavigationSplitView) layout container.
 // Per V3 §DesignSystem/AdaptiveLayout.swift blueprint.
+// Views retrieve dependencies via Environment, matching parameterless view initializers.
 
 import SwiftUI
 
@@ -12,7 +13,9 @@ struct RootNavigationView: View {
 
     var body: some View {
         Group {
-            if session.requiresOnboarding {
+            if session.isLocked {
+                AppLockView()
+            } else if session.requiresOnboarding {
                 OnboardingView()
             } else if horizontalSizeClass == .compact {
                 compactTabView
@@ -30,19 +33,19 @@ struct RootNavigationView: View {
     @ViewBuilder
     private var compactTabView: some View {
         TabView(selection: Bindable(router).selectedDestination) {
-            DashboardView(viewModel: container.makeDashboardViewModel())
+            DashboardView()
                 .tabItem {
                     Label("Dashboard", systemImage: "sparkles")
                 }
                 .tag(AppDestination.dashboard)
 
-            TaskDashboardView(viewModel: container.makeTasksViewModel())
+            TaskDashboardView()
                 .tabItem {
                     Label("Tasks", systemImage: "checklist")
                 }
                 .tag(AppDestination.tasks)
 
-            HistoryView(viewModel: container.makeHistoryViewModel())
+            HistoryView()
                 .tabItem {
                     Label("History", systemImage: "clock.arrow.circlepath")
                 }
@@ -54,7 +57,7 @@ struct RootNavigationView: View {
                 }
                 .tag(AppDestination.configuration)
 
-            SettingsView(viewModel: container.makeSettingsViewModel())
+            SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
@@ -99,15 +102,15 @@ struct RootNavigationView: View {
     private func destinationView(for destination: AppDestination) -> some View {
         switch destination {
         case .dashboard:
-            DashboardView(viewModel: container.makeDashboardViewModel())
+            DashboardView()
         case .tasks:
-            TaskDashboardView(viewModel: container.makeTasksViewModel())
+            TaskDashboardView()
         case .history:
-            HistoryView(viewModel: container.makeHistoryViewModel())
+            HistoryView()
         case .configuration:
             ConfigurationView()
         case .settings:
-            SettingsView(viewModel: container.makeSettingsViewModel())
+            SettingsView()
         }
     }
 
@@ -134,3 +137,49 @@ struct RootNavigationView: View {
     }
 }
 
+// MARK: - AppLockView
+
+struct AppLockView: View {
+    @Environment(AppSession.self) private var session
+    @State private var unlockError: String?
+
+    var body: some View {
+        VStack(spacing: AppTheme.Spacing.lg) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(Color.accentColor)
+
+            Text("Personal Assistant is Locked")
+                .font(.title2)
+                .bold()
+
+            if let error = unlockError {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            Button {
+                Task {
+                    let gate = BiometricGate()
+                    do {
+                        let success = try await gate.authenticate()
+                        if success {
+                            session.unlock()
+                        } else {
+                            unlockError = "Authentication failed. Passcode required."
+                        }
+                    } catch {
+                        unlockError = error.localizedDescription
+                    }
+                }
+            } label: {
+                Label("Unlock", systemImage: "faceid")
+                    .frame(minWidth: 160)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .padding()
+    }
+}

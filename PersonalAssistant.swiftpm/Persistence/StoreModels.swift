@@ -417,3 +417,46 @@ final class StoredAttachment {
         self.createdAt = createdAt
     }
 }
+
+// MARK: - Stored Tool Receipt
+
+@Model
+final class StoredToolReceipt {
+    @Attribute(.unique) var id: UUID
+    var invocationID: UUID
+    var operationKey: String
+    var statusRaw: String
+    var toolID: String
+    var ownerID: UUID
+    var traceIDRaw: UUID
+    var externalReference: String?
+    var redactedResult: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID,
+        invocationID: UUID,
+        operationKey: String,
+        statusRaw: String,
+        toolID: String,
+        ownerID: UUID,
+        traceIDRaw: UUID,
+        externalReference: String? = nil,
+        redactedResult: String? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.invocationID = invocationID
+        self.operationKey = operationKey
+        self.statusRaw = statusRaw
+        self.toolID = toolID
+        self.ownerID = ownerID
+        self.traceIDRaw = traceIDRaw
+        self.externalReference = externalReference
+        self.redactedResult = redactedResult
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}

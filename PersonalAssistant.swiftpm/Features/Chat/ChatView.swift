@@ -45,7 +45,7 @@ struct ChatView: View {
         }
         .task {
             let vm = container.makeChatViewModel(
-                conversationID: conversationID ?? ConversationID()
+                conversationID: conversationID
             )
             viewModel = vm
             await vm.load()

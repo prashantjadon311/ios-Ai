@@ -1,14 +1,17 @@
 {
   "images": [
     {
+      "filename": "Saar.png",
       "idiom": "universal",
       "scale": "1x"
     },
     {
+      "filename": "Saar@2x.png",
       "idiom": "universal",
       "scale": "2x"
     },
     {
+      "filename": "Saar@3x.png",
       "idiom": "universal",
       "scale": "3x"
     }

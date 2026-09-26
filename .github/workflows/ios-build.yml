@@ -1,0 +1,50 @@
+name: iOS Build & Verify
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Static Contract & Schema Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run V3 Handoff Validator
+        run: python3 docs/spec/v3/20_VALIDATE_HANDOFF.py
+
+      - name: Run Test Matrix Verification Suite (T001-T028, S001-S018)
+        run: python3 scratch/verify_matrix.py
+
+      - name: Run Chat Vertical Slice Test
+        run: python3 scratch/test_chat_slice.py
+
+  build-ios:
+    name: Xcode iOS Build Verification
+    runs-on: macos-14
+    needs: verify
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.0.app || sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Build Swift Playgrounds App Target
+        working-directory: PersonalAssistant.swiftpm
+        run: |
+          xcodebuild -scheme PersonalAssistant \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
