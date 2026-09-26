@@ -106,7 +106,7 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .imageScale(.large)
-                        .foregroundStyle(vm.composerText.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : .accent)
+                        .foregroundStyle(vm.composerText.trimmingCharacters(in: .whitespaces).isEmpty ? Color.gray : AppTheme.Color.accent)
                 }
                 .disabled(vm.composerText.trimmingCharacters(in: .whitespaces).isEmpty)
                 .frame(minWidth: AppTheme.minimumTapTarget, minHeight: AppTheme.minimumTapTarget)
@@ -202,7 +202,7 @@ struct MessageBubble: View {
             Text(t)
                 .font(.body)
                 .textSelection(.enabled)
-        case .attachment(let id):
+        case .attachment(_):
             Label("Attachment", systemImage: "paperclip")
                 .font(.caption)
         case .toolResult(_, let summary):

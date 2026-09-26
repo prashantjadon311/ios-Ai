@@ -35,7 +35,8 @@ struct TaskEditorView: View {
                 Toggle("Schedule this task", isOn: $hasSchedule)
                     .accessibilityLabel("Enable schedule")
                 if hasSchedule {
-                    DatePicker("Date & Time", selection: $scheduleDate, style: .compact)
+                    DatePicker("Date & Time", selection: $scheduleDate)
+                        .datePickerStyle(.compact)
                         .accessibilityLabel("Task date and time")
 
                     Toggle("Repeat", isOn: $hasRecurrence)

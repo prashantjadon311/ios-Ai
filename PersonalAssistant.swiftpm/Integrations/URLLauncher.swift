@@ -9,7 +9,7 @@ final class URLLauncher {
 
     /// Opens an external URL if verified safe.
     static func openURL(_ url: URL) async -> Bool {
-        guard URLSafety.isSafeToOpen(url: url) else { return false }
+        guard URLSafetyValidator.isSafe(url: url) else { return false }
         return await UIApplication.shared.open(url)
     }
 }

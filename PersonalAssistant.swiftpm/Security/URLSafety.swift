@@ -26,6 +26,10 @@ struct URLSafetyValidator: Sendable {
         }
     }
 
+    static func isSafeToOpen(url: URL) -> Bool {
+        isSafe(url: url)
+    }
+
     static func validateDestination(_ url: URL) throws {
         // 1. Only HTTPS scheme permitted
         guard let scheme = url.scheme?.lowercased(), scheme == "https" else {
@@ -89,3 +93,5 @@ struct URLSafetyValidator: Sendable {
         }
     }
 }
+
+typealias URLSafety = URLSafetyValidator
