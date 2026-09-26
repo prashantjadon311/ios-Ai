@@ -12,6 +12,27 @@ permissions:
   contents: read
 
 jobs:
+  verify:
+    name: Static Contract & Schema Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run V3 Handoff Validator
+        run: python3 docs/spec/v3/20_VALIDATE_HANDOFF.py
+
+      - name: Run Test Matrix Verification Suite (T001-T028, S001-S018)
+        run: python3 scratch/verify_matrix.py
+
+      - name: Run Chat Vertical Slice Test
+        run: python3 scratch/test_chat_slice.py
+
   portable-swift-tests:
     name: Portable Swift Core Tests
     runs-on: macos-15
@@ -24,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           chosen=''
-          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app /Applications/Xcode_16.3.app /Applications/Xcode_15.4.app; do
+          for app in /Applications/Xcode_26.1.1.app /Applications/Xcode_26.0.1.app /Applications/Xcode_26.2.app /Applications/Xcode_26.3.app /Applications/Xcode_26.1.app /Applications/Xcode_26.0.app /Applications/Xcode.app /Applications/Xcode_16.4.app /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app; do
             if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
           done
           if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi
@@ -71,14 +92,16 @@ jobs:
         run: |
           set -euo pipefail
           chosen=''
-          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app /Applications/Xcode_16.3.app /Applications/Xcode_15.4.app; do
+          for app in /Applications/Xcode_26.1.1.app /Applications/Xcode_26.0.1.app /Applications/Xcode_26.2.app /Applications/Xcode_26.3.app /Applications/Xcode_26.1.app /Applications/Xcode_26.0.app /Applications/Xcode.app /Applications/Xcode_16.4.app /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app; do
             if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
           done
-          if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi
+          if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found.'; exit 77; fi
           sudo xcode-select -s "$chosen/Contents/Developer"
+          export DEVELOPER_DIR="$chosen/Contents/Developer"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
           xcodebuild -version
 
-      - name: Verify ORIGINAL app candidate manifest and resources
+      - name: Check ORIGINAL app candidate manifest and resources
         shell: bash
         run: |
           set -euo pipefail
@@ -93,14 +116,14 @@ jobs:
         working-directory: PersonalAssistant.swiftpm
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           rm -rf "$RUNNER_TEMP/PersonalAssistant-Catalyst.xcresult"
           xcodebuild -scheme PersonalAssistant \
             -destination "platform=macOS,variant=Mac Catalyst" \
             -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-Catalyst.xcresult" \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/catalyst-build.log"
 
-      - name: Upload Apple Swift compiler evidence
+      - name: Upload Apple Catalyst compiler evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -110,14 +133,14 @@ jobs:
             ${{ runner.temp }}/catalyst-build.log
             ${{ runner.temp }}/PersonalAssistant-Catalyst.xcresult
 
-  apple-app-build:
+  apple-ios-build:
     name: Apple iOS App Build
     runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
-      - name: Audit installed Xcode candidates, SDKs and destinations
+      - name: Audit installed Xcode candidates and select compatible toolchain
         shell: bash
         run: |
           set -euo pipefail
@@ -126,19 +149,34 @@ jobs:
           echo "=== AVAILABLE XCODE APPLICATIONS ===" | tee "$RUNNER_TEMP/ios-diagnostics/xcode-candidates.log"
           ls -la /Applications/Xcode* | tee -a "$RUNNER_TEMP/ios-diagnostics/xcode-candidates.log" || true
 
-          echo "=== DETAILED XCODE & DESTINATION AUDIT ===" | tee "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log"
-          for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app; do
+          chosen=''
+          for app in /Applications/Xcode_26.1.1.app /Applications/Xcode_26.0.1.app /Applications/Xcode_26.2.app /Applications/Xcode_26.3.app /Applications/Xcode_26.1.app /Applications/Xcode_26.0.app /Applications/Xcode.app /Applications/Xcode_16.4.app /Applications/Xcode_16.3.app; do
             if [[ -d "$app/Contents/Developer" ]]; then
-              echo ">>> INSPECTING: $app" | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log"
-              sudo xcode-select -s "$app/Contents/Developer" || true
-              xcodebuild -version | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log" || true
-              xcodebuild -showsdks | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log" || true
-              (cd PersonalAssistant.swiftpm && xcodebuild -list 2>&1 | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log") || true
-              (cd PersonalAssistant.swiftpm && xcodebuild -showdestinations -scheme PersonalAssistant 2>&1 | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log") || true
+              echo "Inspecting candidate: $app"
+              export DEVELOPER_DIR="$app/Contents/Developer"
+              sdk_ver=$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || true)
+              echo "  iphonesimulator SDK: $sdk_ver"
+              chosen="$app"
+              break
             fi
           done
 
-      - name: Verify ORIGINAL app candidate manifest and resources
+          if [[ -z "$chosen" ]]; then
+            echo "E01: No compatible Xcode candidate installed."
+            exit 77
+          fi
+
+          echo "Selected Xcode: $chosen"
+          sudo xcode-select -s "$chosen/Contents/Developer"
+          export DEVELOPER_DIR="$chosen/Contents/Developer"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+
+          xcodebuild -version | tee -a "$RUNNER_TEMP/ios-diagnostics/xcode-version.log"
+          xcodebuild -showsdks | tee -a "$RUNNER_TEMP/ios-diagnostics/xcode-sdks.log"
+          xcrun --sdk iphoneos --show-sdk-version | tee -a "$RUNNER_TEMP/ios-diagnostics/iphoneos-sdk.log" || true
+          xcrun --sdk iphonesimulator --show-sdk-version | tee -a "$RUNNER_TEMP/ios-diagnostics/iphonesimulator-sdk.log" || true
+
+      - name: Check ORIGINAL app candidate manifest and resources
         id: manifest
         shell: bash
         run: |
@@ -152,55 +190,74 @@ jobs:
             echo 'fixed=true' >> "$GITHUB_OUTPUT"
           else
             echo 'fixed=false' >> "$GITHUB_OUTPUT"
-            echo 'Original Playgrounds manifest still missing defaultLocalization: shipping blocked.'
+            echo 'Original Playgrounds manifest missing defaultLocalization: shipping blocked.'
+            exit 22
           fi
 
-      - name: Compile ORIGINAL iPad candidate when compatible iOS platform exists
+      - name: Discover and verify iOS destinations
         working-directory: PersonalAssistant.swiftpm
         shell: bash
         run: |
           set -euo pipefail
-          chosen=''
-          for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode.app; do
-            if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
-          done
-          sudo xcode-select -s "$chosen/Contents/Developer"
-
+          xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-diagnostics/scheme-list.log"
           DEST_OUTPUT=$(xcodebuild -showdestinations -scheme PersonalAssistant 2>&1 || true)
           echo "$DEST_OUTPUT" | tee "$RUNNER_TEMP/ios-destinations.log"
 
-          # Available destinations appear before Ineligible destinations in xcodebuild output
           AVAILABLE_SECTION=$(echo "$DEST_OUTPUT" | sed -n '/Available destinations/,/Ineligible destinations/p')
 
           ELIGIBLE_IOS_DEST=""
-          if echo "$AVAILABLE_SECTION" | grep -Eq 'platform:[[:space:]]*iOS,'; then
-            ELIGIBLE_IOS_DEST="generic/platform=iOS"
-          elif echo "$AVAILABLE_SECTION" | grep -Eq 'platform:[[:space:]]*iOS Simulator'; then
+          if echo "$AVAILABLE_SECTION" | grep -Eq 'platform:[[:space:]]*iOS Simulator'; then
             ELIGIBLE_IOS_DEST="generic/platform=iOS Simulator"
+          elif echo "$AVAILABLE_SECTION" | grep -Eq 'platform:[[:space:]]*iOS,'; then
+            ELIGIBLE_IOS_DEST="generic/platform=iOS"
           fi
 
           if [[ -n "$ELIGIBLE_IOS_DEST" ]]; then
             echo "Eligible iOS destination found: $ELIGIBLE_IOS_DEST"
-            set -o pipefail
-            rm -rf "$RUNNER_TEMP/PersonalAssistant-iOS.xcresult"
-            xcodebuild -scheme PersonalAssistant \
-              -destination "$ELIGIBLE_IOS_DEST" \
-              -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-iOS.xcresult" \
-              CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"
+            echo "ELIGIBLE_IOS_DEST=$ELIGIBLE_IOS_DEST" >> "$GITHUB_ENV"
           else
             echo "=========================================================="
             echo "CLASSIFICATION: ENVIRONMENT_BLOCKED"
             echo "=========================================================="
             echo "Declared minimum deployment target in Package.swift: iOS 18.6"
-            echo "Installed Xcode: $chosen"
-            echo "Available destinations for PersonalAssistant scheme contain no eligible iOS platform runtime."
-            echo "Apple device platform requires downloading separate platform bundle or runner image with preinstalled iOS 18.6 SDK."
-            echo "Per Phase 3 contract: Stopping Apple build job with ENVIRONMENT_BLOCKED classification and retaining full environment diagnostics."
+            echo "Available destinations contain no eligible iOS platform runtime."
+            echo "Stopping Apple build job with ENVIRONMENT_BLOCKED classification."
             echo "=========================================================="
             exit 77
           fi
 
-      - name: Upload Apple iOS build and environment diagnostics
+      - name: Compile and link ORIGINAL iOS application
+        working-directory: PersonalAssistant.swiftpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/PersonalAssistant-iOS.xcresult" "$RUNNER_TEMP/DerivedData"
+          xcodebuild -scheme PersonalAssistant \
+            -destination "$ELIGIBLE_IOS_DEST" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-iOS.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"
+
+      - name: Package and verify unsigned application artifact
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          APP_PATH=$(find "$RUNNER_TEMP/DerivedData/Build/Products" -name "PersonalAssistant.app" -type d | head -n 1)
+          if [[ -n "$APP_PATH" && -d "$APP_PATH" ]]; then
+            echo "Built app bundle located at: $APP_PATH"
+            (cd "$(dirname "$APP_PATH")" && zip -r "$RUNNER_TEMP/artifacts/PersonalAssistant-unsigned-app.zip" "$(basename "$APP_PATH")")
+            echo "Zipped app artifact: $RUNNER_TEMP/artifacts/PersonalAssistant-unsigned-app.zip"
+            echo "APP_ARTIFACT_BUILT=true" >> "$GITHUB_ENV"
+          else
+            echo "PersonalAssistant.app directory not found in DerivedData products."
+            echo "APP_ARTIFACT_BUILT=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Upload Apple iOS build evidence and application artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -211,3 +268,4 @@ jobs:
             ${{ runner.temp }}/ios-destinations.log
             ${{ runner.temp }}/ios-app-build.log
             ${{ runner.temp }}/PersonalAssistant-iOS.xcresult
+            ${{ runner.temp }}/artifacts/PersonalAssistant-unsigned-app.zip

@@ -35,7 +35,7 @@ struct AssistantSwitcher: View {
                         Spacer()
                         if session.activeAssistant?.id == profile.id {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.accent)
+                                .foregroundStyle(AppTheme.Color.accent)
                         }
                     }
                     .padding(.vertical, AppTheme.Spacing.xs)

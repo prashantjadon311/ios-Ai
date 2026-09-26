@@ -179,7 +179,7 @@ struct PermissionRow: View {
         HStack {
             Image(systemName: icon)
                 .frame(width: 28)
-                .foregroundStyle(.accent)
+                .foregroundStyle(AppTheme.Color.accent)
             VStack(alignment: .leading) {
                 Text(name).font(.subheadline)
                 Text(note).font(.caption).foregroundStyle(.secondary)

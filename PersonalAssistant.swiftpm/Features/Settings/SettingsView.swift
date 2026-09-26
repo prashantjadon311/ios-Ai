@@ -79,7 +79,7 @@ struct SettingsView: View {
             }
 
             // Data
-            Section("Data") {
+            Section {
                 NavigationLink("Storage") {
                     StorageSettingsView()
                 }
@@ -90,6 +90,8 @@ struct SettingsView: View {
                 }
                 .disabled(true)
                 .accessibilityLabel("Clear all app data (Disabled)")
+            } header: {
+                Text("Data")
             } footer: {
                 Text("Bulk data wipe is disabled to prevent accidental data loss. Individual items can be managed or deleted from their respective views.")
                     .font(.footnote)
