@@ -83,11 +83,3 @@ struct OnboardingView: View {
         .padding(AppTheme.Spacing.xl)
     }
 }
-
-// MARK: - AppSession onboarding extension
-
-extension AppSession {
-    func completeOnboarding() async {
-        requiresOnboarding = false
-    }
-}

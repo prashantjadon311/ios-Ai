@@ -12,121 +12,6 @@ permissions:
   contents: read
 
 jobs:
-  apple-app-build:
-    name: Apple iOS App Build
-    runs-on: macos-15
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Record exact candidate and select installed compatible Xcode
-        shell: bash
-        run: |
-          set -euo pipefail
-          git rev-parse HEAD
-          git status --porcelain=v1
-          chosen=''
-          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app /Applications/Xcode_16.3.app /Applications/Xcode_15.4.app; do
-            if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
-          done
-          if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi
-          sudo xcode-select -s "$chosen/Contents/Developer"
-          xcodebuild -version
-          xcodebuild -showsdks
-          xcrun --sdk iphonesimulator --show-sdk-version
-
-      - name: Check ORIGINAL app candidate manifest and resources
-        id: manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f PersonalAssistant.swiftpm/Package.swift
-          test -f PersonalAssistant.swiftpm/Resources/en.lproj/Localizable.strings
-          test -f PersonalAssistant.swiftpm/Resources/hi.lproj/Localizable.strings
-          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Maya.imageset/Maya.png
-          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Saar.imageset/Saar.png
-          if grep -Eq 'defaultLocalization:[[:space:]]*"en"' PersonalAssistant.swiftpm/Package.swift; then
-            echo 'fixed=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'fixed=false' >> "$GITHUB_OUTPUT"
-            echo 'Original Playgrounds manifest still missing defaultLocalization: shipping blocked.'
-          fi
-
-      - name: Prepare disposable diagnostic copy ONLY if shipping manifest is blocked
-        if: steps.manifest.outputs.fixed == 'false'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/diagnostic"
-          cp -R PersonalAssistant.swiftpm "$RUNNER_TEMP/diagnostic/PersonalAssistant.swiftpm"
-          python3 - "$RUNNER_TEMP/diagnostic/PersonalAssistant.swiftpm/Package.swift" <<'PYCODE'
-          import pathlib,sys
-          p=pathlib.Path(sys.argv[1]); content=p.read_text()
-          anchor='    name: "PersonalAssistant",'
-          if content.count(anchor)!=1 or 'defaultLocalization:' in content:
-              raise SystemExit('Ambiguous generated manifest; refusing unsafe text patch')
-          p.write_text(content.replace(anchor,anchor+'\n    defaultLocalization: "en",',1))
-          PYCODE
-
-      - name: Get REAL compiler diagnostics from disposable shadow copy
-        if: steps.manifest.outputs.fixed == 'false'
-        working-directory: ${{ runner.temp }}/diagnostic/PersonalAssistant.swiftpm
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo 'SHADOW SOURCE DIAGNOSTICS ONLY. This is not a shipping package build.'
-          xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-scheme-discovery.log"
-          xcodebuild -scheme PersonalAssistant \
-            -destination 'generic/platform=iOS Simulator' \
-            -resultBundlePath "$RUNNER_TEMP/Diagnostic.xcresult" \
-            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"
-
-      - name: Compile ORIGINAL iPad candidate when manifest is fixed
-        if: steps.manifest.outputs.fixed == 'true'
-        working-directory: PersonalAssistant.swiftpm
-        shell: bash
-        run: |
-          xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-scheme-discovery.log"
-          build_success=false
-          for dest in "platform=macOS,variant=Mac Catalyst" "generic/platform=iOS" "generic/platform=iOS Simulator"; do
-            echo "Attempting compilation with destination: $dest"
-            rm -rf "$RUNNER_TEMP/PersonalAssistant.xcresult"
-            if xcodebuild -scheme PersonalAssistant \
-              -destination "$dest" \
-              -resultBundlePath "$RUNNER_TEMP/PersonalAssistant.xcresult" \
-              CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"; then
-              echo "BUILD_SUCCESS=true for destination: $dest"
-              build_success=true
-              break
-            else
-              echo "Build with destination '$dest' failed."
-            fi
-          done
-          if [[ "$build_success" != "true" ]]; then
-            echo "All eligible destinations failed compilation."
-            exit 65
-          fi
-
-      - name: Fail the shipping gate if original manifest is still invalid
-        if: always() && steps.manifest.outputs.fixed == 'false'
-        shell: bash
-        run: |
-          echo 'SHIPPING_BUILD=FAIL. Diagnostic shadow compile, even if green, never fixes original .swiftpm iPad export.'
-          exit 22
-
-      - name: Upload actual Apple diagnostics on every outcome
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: apple-source-and-shipping-evidence-${{ github.sha }}
-          if-no-files-found: warn
-          path: |
-            ${{ runner.temp }}/ios-scheme-discovery.log
-            ${{ runner.temp }}/ios-app-build.log
-            ${{ runner.temp }}/Diagnostic.xcresult
-            ${{ runner.temp }}/PersonalAssistant.xcresult
-            ${{ runner.temp }}/PersonalAssistant-Device.xcresult
-
   portable-swift-tests:
     name: Portable Swift Core Tests
     runs-on: macos-15
@@ -173,3 +58,156 @@ jobs:
           if-no-files-found: warn
           path: |
             ${{ runner.temp }}/portable-tests.log
+
+  catalyst-swift-compile:
+    name: Apple Swift Compiler (Mac Catalyst)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select installed compatible Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          chosen=''
+          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app /Applications/Xcode_16.3.app /Applications/Xcode_15.4.app; do
+            if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
+          done
+          if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi
+          sudo xcode-select -s "$chosen/Contents/Developer"
+          xcodebuild -version
+
+      - name: Verify ORIGINAL app candidate manifest and resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f PersonalAssistant.swiftpm/Package.swift
+          test -f PersonalAssistant.swiftpm/Resources/en.lproj/Localizable.strings
+          test -f PersonalAssistant.swiftpm/Resources/hi.lproj/Localizable.strings
+          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Maya.imageset/Maya.png
+          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Saar.imageset/Saar.png
+          grep -Eq 'defaultLocalization:[[:space:]]*"en"' PersonalAssistant.swiftpm/Package.swift
+
+      - name: Compile ORIGINAL app with Apple Swift Compiler (Mac Catalyst)
+        working-directory: PersonalAssistant.swiftpm
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf "$RUNNER_TEMP/PersonalAssistant-Catalyst.xcresult"
+          xcodebuild -scheme PersonalAssistant \
+            -destination "platform=macOS,variant=Mac Catalyst" \
+            -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-Catalyst.xcresult" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/catalyst-build.log"
+
+      - name: Upload Apple Swift compiler evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-catalyst-compiler-evidence-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/catalyst-build.log
+            ${{ runner.temp }}/PersonalAssistant-Catalyst.xcresult
+
+  apple-app-build:
+    name: Apple iOS App Build
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit installed Xcode candidates, SDKs and destinations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ios-diagnostics"
+
+          echo "=== AVAILABLE XCODE APPLICATIONS ===" | tee "$RUNNER_TEMP/ios-diagnostics/xcode-candidates.log"
+          ls -la /Applications/Xcode* | tee -a "$RUNNER_TEMP/ios-diagnostics/xcode-candidates.log" || true
+
+          echo "=== DETAILED XCODE & DESTINATION AUDIT ===" | tee "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log"
+          for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app; do
+            if [[ -d "$app/Contents/Developer" ]]; then
+              echo ">>> INSPECTING: $app" | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log"
+              sudo xcode-select -s "$app/Contents/Developer" || true
+              xcodebuild -version | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log" || true
+              xcodebuild -showsdks | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log" || true
+              (cd PersonalAssistant.swiftpm && xcodebuild -list 2>&1 | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log") || true
+              (cd PersonalAssistant.swiftpm && xcodebuild -showdestinations -scheme PersonalAssistant 2>&1 | tee -a "$RUNNER_TEMP/ios-diagnostics/destinations-audit.log") || true
+            fi
+          done
+
+      - name: Verify ORIGINAL app candidate manifest and resources
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f PersonalAssistant.swiftpm/Package.swift
+          test -f PersonalAssistant.swiftpm/Resources/en.lproj/Localizable.strings
+          test -f PersonalAssistant.swiftpm/Resources/hi.lproj/Localizable.strings
+          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Maya.imageset/Maya.png
+          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Saar.imageset/Saar.png
+          if grep -Eq 'defaultLocalization:[[:space:]]*"en"' PersonalAssistant.swiftpm/Package.swift; then
+            echo 'fixed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'fixed=false' >> "$GITHUB_OUTPUT"
+            echo 'Original Playgrounds manifest still missing defaultLocalization: shipping blocked.'
+          fi
+
+      - name: Compile ORIGINAL iPad candidate when compatible iOS platform exists
+        working-directory: PersonalAssistant.swiftpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          chosen=''
+          for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode.app; do
+            if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
+          done
+          sudo xcode-select -s "$chosen/Contents/Developer"
+
+          DEST_OUTPUT=$(xcodebuild -showdestinations -scheme PersonalAssistant 2>&1 || true)
+          echo "$DEST_OUTPUT" | tee "$RUNNER_TEMP/ios-destinations.log"
+
+          # Available destinations appear before Ineligible destinations in xcodebuild output
+          AVAILABLE_SECTION=$(echo "$DEST_OUTPUT" | sed -n '/Available destinations/,/Ineligible destinations/p')
+
+          ELIGIBLE_IOS_DEST=""
+          if echo "$AVAILABLE_SECTION" | grep -Eq 'platform:[[:space:]]*iOS,'; then
+            ELIGIBLE_IOS_DEST="generic/platform=iOS"
+          elif echo "$AVAILABLE_SECTION" | grep -Eq 'platform:[[:space:]]*iOS Simulator'; then
+            ELIGIBLE_IOS_DEST="generic/platform=iOS Simulator"
+          fi
+
+          if [[ -n "$ELIGIBLE_IOS_DEST" ]]; then
+            echo "Eligible iOS destination found: $ELIGIBLE_IOS_DEST"
+            set -o pipefail
+            rm -rf "$RUNNER_TEMP/PersonalAssistant-iOS.xcresult"
+            xcodebuild -scheme PersonalAssistant \
+              -destination "$ELIGIBLE_IOS_DEST" \
+              -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-iOS.xcresult" \
+              CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"
+          else
+            echo "=========================================================="
+            echo "CLASSIFICATION: ENVIRONMENT_BLOCKED"
+            echo "=========================================================="
+            echo "Declared minimum deployment target in Package.swift: iOS 18.6"
+            echo "Installed Xcode: $chosen"
+            echo "Available destinations for PersonalAssistant scheme contain no eligible iOS platform runtime."
+            echo "Apple device platform requires downloading separate platform bundle or runner image with preinstalled iOS 18.6 SDK."
+            echo "Per Phase 3 contract: Stopping Apple build job with ENVIRONMENT_BLOCKED classification and retaining full environment diagnostics."
+            echo "=========================================================="
+            exit 77
+          fi
+
+      - name: Upload Apple iOS build and environment diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-ios-build-evidence-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/ios-diagnostics/
+            ${{ runner.temp }}/ios-destinations.log
+            ${{ runner.temp }}/ios-app-build.log
+            ${{ runner.temp }}/PersonalAssistant-iOS.xcresult
