@@ -11,8 +11,8 @@ struct TodayTaskCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
                     .font(.headline)
-                if let schedule = task.scheduleTime {
-                    Text(DateFormattingHelpers.shortTime(schedule))
+                if let schedule = task.schedule {
+                    Text(DateFormattingHelpers.shortTime(schedule.fireDate))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

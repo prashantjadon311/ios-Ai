@@ -10,7 +10,7 @@ struct AIConfigurationView: View {
             Section("Generation Settings") {
                 Stepper("Response Limit: \(maxTokens) tokens", value: $maxTokens, in: 256...8192, step: 256)
                 VStack(alignment: .leading) {
-                    Text("Temperature: \(String(format: \"%.1f\", temperature))")
+                    Text("Temperature: " + temperature.formatted(.number.precision(.fractionLength(1))))
                     Slider(value: $temperature, in: 0.0...1.0, step: 0.1)
                 }
             }

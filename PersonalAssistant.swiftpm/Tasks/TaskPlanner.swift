@@ -1,15 +1,17 @@
 // Tasks/TaskPlanner.swift
-// Decomposes high-level goals into atomic verifiable TaskStep items.
+// Decomposes high-level goals into atomic verifiable descriptions.
 // Per V3 §Tasks/TaskPlanner.swift blueprint.
 
 import Foundation
 
 struct TaskPlanner: Sendable {
-    static func planSteps(for goal: String) -> [TaskStep] {
+    static func planDescriptions(for goal: String) -> [String] {
+        let trimmed = goal.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
         return [
-            TaskStep(title: "Analyze goal: \(goal)", sequence: 1),
-            TaskStep(title: "Execute primary task actions", sequence: 2),
-            TaskStep(title: "Verify completion and record audit receipt", sequence: 3)
+            "Analyze goal: " + trimmed,
+            "Execute approved primary action",
+            "Verify outcome and persist receipt"
         ]
     }
 }

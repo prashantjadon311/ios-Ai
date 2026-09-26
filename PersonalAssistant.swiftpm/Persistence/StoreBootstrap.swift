@@ -33,7 +33,7 @@ enum StoreBootstrap {
             // Do NOT reset/delete the store. Preserve original and surface recovery path.
             let storeURL = configuration.url
             return .recoveryRequired(
-                reason: "Store failed to open: \(error.localizedDescription). Original store preserved at \(storeURL?.path ?? "unknown").",
+                reason: "Store failed to open: \(error.localizedDescription). Original store preserved at \(storeURL.path).",
                 originalStoreURL: storeURL
             )
         }

@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "iOS Swift syntax parse on Linux (NOT iOS build)",
+      "type": "shell",
+      "command": "bash docs/implementation/release_repair_v2/scripts/check_swift_syntax.sh .",
+      "problemMatcher": [],
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Portable compiled real-source Swift XCTest (NOT iOS app)",
+      "type": "shell",
+      "command": "python3 docs/implementation/release_repair_v2/scripts/sync_portable_sources.py . && swift test --package-path docs/implementation/release_repair_v2/portable_core_tests",
+      "problemMatcher": [],
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Show candidate source and dirty state",
+      "type": "shell",
+      "command": "git rev-parse HEAD && git status --short && swift --version",
+      "problemMatcher": [],
+      "group": "test"
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import Foundation
 import SwiftUI
 import Observation
 
-/// Primary navigation destinations (five screens).
+/// Primary navigation destinations (five screens + chat/approvals as routed surfaces).
 enum AppDestination: Hashable, Equatable {
     case dashboard
     case tasks
@@ -38,12 +38,26 @@ enum AppSheet: Identifiable, Hashable {
     }
 }
 
+/// Intent to launch chat with an initial prompt text and a unique launch nonce for deduplication.
+struct ChatLaunchIntent: Hashable, Sendable {
+    let conversationID: ConversationID
+    let initialText: String?
+    let launchNonce: UUID
+
+    init(conversationID: ConversationID, initialText: String?, launchNonce: UUID = UUID()) {
+        self.conversationID = conversationID
+        self.initialText = initialText
+        self.launchNonce = launchNonce
+    }
+}
+
 @MainActor
 @Observable
 final class AppRouter {
     var selectedDestination: AppDestination = .dashboard
     var presentedSheet: AppSheet?
     var navigationPath: NavigationPath = NavigationPath()
+    var pendingLaunchIntent: ChatLaunchIntent?
 
     // MARK: - Navigation actions
 
@@ -77,8 +91,12 @@ final class AppRouter {
 
     // MARK: - Deep link handling (rejects unknown/unsafe links per V3 A17)
 
+    /// Handles universal links and deep links.
+    /// Only processes known safe URL schemes; unknown links are rejected.
     func handle(url: URL) {
+        // Only process our custom scheme or known safe patterns
         guard url.scheme == "personalassistant" else {
+            // Unknown scheme — do not process (A17: reject untrusted deep-link injection)
             return
         }
         switch url.host {
@@ -90,14 +108,16 @@ final class AppRouter {
         case "approvals":
             openApprovals()
         default:
+            // Unknown deep link — silently ignore (A17)
             break
         }
     }
 
     // MARK: - Restore safe route
 
+    /// On scene restore, only restores safe destinations (not sheets with sensitive data).
     func restoreSafeRoute(_ destination: AppDestination) {
         selectedDestination = destination
-        presentedSheet = nil
+        presentedSheet = nil  // never auto-restore sheets
     }
 }

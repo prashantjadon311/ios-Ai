@@ -42,7 +42,7 @@ struct OnboardingView: View {
         VStack(spacing: AppTheme.Spacing.lg) {
             Image(systemName: "brain.head.profile")
                 .font(.system(size: 80))
-                .foregroundStyle(.accent)
+                .foregroundStyle(AppTheme.Color.accent)
             Text("Personal Assistant")
                 .font(.largeTitle.bold())
             Text("Your private, local-first AI companion.\n\nAll data stays on your device. You control when and if anything is shared.")
@@ -57,7 +57,7 @@ struct OnboardingView: View {
         VStack(spacing: AppTheme.Spacing.lg) {
             Image(systemName: "key.fill")
                 .font(.system(size: 80))
-                .foregroundStyle(.accent)
+                .foregroundStyle(AppTheme.Color.accent)
             Text("Bring Your Own Key")
                 .font(.largeTitle.bold())
             Text("To enable AI chat, add your own API key in Configuration.\n\nGroq and OpenRouter offer free tiers. No key is required for local features.")
@@ -72,7 +72,7 @@ struct OnboardingView: View {
         VStack(spacing: AppTheme.Spacing.lg) {
             Image(systemName: "shield.fill")
                 .font(.system(size: 80))
-                .foregroundStyle(.accent)
+                .foregroundStyle(AppTheme.Color.accent)
             Text("Permissions")
                 .font(.largeTitle.bold())
             Text("The app will request permission for microphone and notifications when you first use those features.\n\nYou can manage all permissions in Settings.")
@@ -81,13 +81,5 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(AppTheme.Spacing.xl)
-    }
-}
-
-// MARK: - AppSession onboarding extension
-
-extension AppSession {
-    func completeOnboarding() async {
-        requiresOnboarding = false
     }
 }

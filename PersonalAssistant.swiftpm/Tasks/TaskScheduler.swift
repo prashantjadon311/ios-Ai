@@ -48,7 +48,7 @@ struct TaskScheduler: Sendable {
     ) -> (occurrenceKey: TaskOccurrenceKey, scheduledDate: Date)? {
         guard let recurrence = task.recurrence else { return nil }
 
-        let timeZone = task.schedule?.timezoneIdentifier.flatMap { TimeZone(identifier: $0) } ?? TimeZone.current
+        let timeZone = task.schedule?.timezone ?? TimeZone.current
 
         var targetHour: Int? = nil
         var targetMinute: Int? = nil

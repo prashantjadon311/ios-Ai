@@ -1,0 +1,3 @@
+.build/
+Sources/AppCorePortable/*.swift
+SNAPSHOT_SHA256.json

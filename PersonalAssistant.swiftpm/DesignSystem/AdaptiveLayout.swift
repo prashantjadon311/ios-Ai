@@ -70,7 +70,10 @@ struct RootNavigationView: View {
     @ViewBuilder
     private var regularSplitView: some View {
         NavigationSplitView {
-            List(selection: Bindable(router).selectedDestination) {
+            List(selection: Binding<AppDestination?>(
+                get: { router.selectedDestination },
+                set: { if let destination = $0 { router.selectedDestination = destination } }
+            )) {
                 Section("Assistant") {
                     NavigationLink(value: AppDestination.dashboard) {
                         Label("Dashboard", systemImage: "sparkles")

@@ -106,7 +106,7 @@ actor TaskRepository {
             }
             if let existing {
                 // Return existing run
-                return self.taskRunFromStored(existing)
+                return Self.taskRunFromStored(existing)
             }
             // Create new
             let run = TaskRun(
@@ -138,7 +138,8 @@ actor TaskRepository {
         }
     }
 
-    private func taskRunFromStored(_ stored: StoredTaskRun) -> TaskRun {
+    @MainActor
+    private static func taskRunFromStored(_ stored: StoredTaskRun) -> TaskRun {
         let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
         let key = (try? dec.decode(TaskOccurrenceKey.self, from: stored.occurrenceKeyData))
             ?? TaskOccurrenceKey(
@@ -213,13 +214,13 @@ actor TaskRepository {
 
     func activeRuns(ownerID: UserID) async throws -> [TaskRun] {
         let ownerUUID = ownerID.rawValue
-        let stored = try await MainActor.run {
+        return try await MainActor.run {
             let descriptor = FetchDescriptor<StoredTaskRun>(
                 predicate: #Predicate { $0.ownerID == ownerUUID },
                 sortBy: [SortDescriptor(\.scheduledAt, order: .reverse)]
             )
-            return try context.fetch(descriptor)
+            let stored = try context.fetch(descriptor)
+            return stored.map { Self.taskRunFromStored($0) }
         }
-        return stored.map { taskRunFromStored($0) }
     }
 }

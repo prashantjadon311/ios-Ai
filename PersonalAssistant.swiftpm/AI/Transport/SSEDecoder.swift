@@ -11,24 +11,17 @@ struct SSEFrame: Sendable {
     var id: String?
     var data: String  // joined with \n if multiple data: lines
     var retry: Int?
-
-    init(event: String? = nil, id: String? = nil, data: String, retry: Int? = nil) {
-        self.event = event
-        self.id = id
-        self.data = data
-        self.retry = retry
-    }
 }
 
 // MARK: - SSE Decoder
 
 /// Stateful byte-correct SSE decoder (B01 algorithm).
 /// Feed raw bytes; call finish() at EOF.
-struct SSEDecoder: Sendable {
+struct SSEDecoder {
 
     // MARK: - Configuration
 
-    static let defaultMaxFrameBytes: Int = 256 * 1024       // 256 KiB
+    static let defaultMaxFrameBytes: Int = 256 * 1024   // 256 KiB
     static let defaultMaxTotalBytes: Int = 2 * 1024 * 1024  // 2 MiB
 
     let maxFrameBytes: Int
@@ -46,6 +39,7 @@ struct SSEDecoder: Sendable {
 
     private var buffer: Data = Data()
     private var totalBytesProcessed: Int = 0
+    // Accumulated fields for current event
     private var currentEvent: String?
     private var currentID: String?
     private var currentDataLines: [String] = []
@@ -73,6 +67,7 @@ struct SSEDecoder: Sendable {
     /// B01 §7: process terminal incomplete line per protocol, emit pending event.
     mutating func finish() throws -> [SSEFrame] {
         var frames = try extractFrames()
+        // If buffer has trailing data (no final blank line), emit pending event if data present
         if !buffer.isEmpty {
             if let line = try extractLine(allowNoNewline: true) {
                 try processLine(line)
@@ -95,21 +90,32 @@ struct SSEDecoder: Sendable {
     private mutating func extractFrames() throws -> [SSEFrame] {
         var frames: [SSEFrame] = []
         while true {
-            guard let lfIndex = buffer.firstIndex(of: 0x0A) else { break }
+            // Find LF byte
+            guard let lfIndex = buffer.firstIndex(of: 0x0A) else {
+                if buffer.count > maxFrameBytes {
+                    throw DecoderError.frameTooLarge(size: buffer.count, limit: maxFrameBytes)
+                }
+                break
+            }
+            // Slice raw line (may include trailing CR)
             let rawLine = buffer[buffer.startIndex..<lfIndex]
-            buffer = buffer[(lfIndex + 1)...]
+            buffer = buffer[(lfIndex + 1)...]  // advance past LF
 
+            // Strip single trailing CR
             var lineBytes = rawLine
             if lineBytes.last == 0x0D { lineBytes = lineBytes.dropLast() }
 
+            // Validate frame size
             if lineBytes.count > maxFrameBytes {
                 throw DecoderError.frameTooLarge(size: lineBytes.count, limit: maxFrameBytes)
             }
 
+            // Decode UTF-8 strictly (B01 §3)
             guard let lineStr = String(bytes: lineBytes, encoding: .utf8) else {
                 throw DecoderError.invalidUTF8
             }
 
+            // Blank line → dispatch event if data present (B01 §4)
             if lineStr.isEmpty {
                 if !currentDataLines.isEmpty {
                     let frame = SSEFrame(
@@ -120,6 +126,7 @@ struct SSEDecoder: Sendable {
                     )
                     frames.append(frame)
                 }
+                // Reset accumulator
                 currentEvent = nil
                 currentID = nil
                 currentDataLines = []
@@ -133,14 +140,17 @@ struct SSEDecoder: Sendable {
     }
 
     private mutating func processLine(_ line: String) throws {
+        // B01 §5: comment
         if line.hasPrefix(":") { return }
 
+        // B01 §5: parse first colon only
         let fieldName: String
         var fieldValue: String
 
         if let colonIdx = line.firstIndex(of: ":") {
             fieldName = String(line[line.startIndex..<colonIdx])
             let afterColon = line[line.index(after: colonIdx)...]
+            // Strip single leading space (B01 §5)
             if afterColon.first == " " {
                 fieldValue = String(afterColon.dropFirst())
             } else {
@@ -157,12 +167,13 @@ struct SSEDecoder: Sendable {
         case "event":
             currentEvent = fieldValue.isEmpty ? nil : fieldValue
         case "id":
+            // B01 §6: reject NUL in ID
             guard !fieldValue.contains("\0") else { throw DecoderError.nullInEventID }
             currentID = fieldValue.isEmpty ? nil : fieldValue
         case "retry":
             if let ms = Int(fieldValue) { currentRetry = ms }
         default:
-            break
+            break  // unknown field names are ignored per SSE spec
         }
     }
 

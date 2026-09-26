@@ -5,9 +5,16 @@
 import Foundation
 
 struct TaskProgressEstimator: Sendable {
-    static func calculateProgress(steps: [TaskStep]) -> Double {
+    static func calculateProgress(
+        steps: [TaskStepRecord]
+    ) -> Double {
         guard !steps.isEmpty else { return 0.0 }
-        let completed = steps.filter { $0.isCompleted }.count
-        return Double(completed) / Double(steps.count)
+
+        let completed = steps.filter {
+            $0.status == .completed
+        }.count
+
+        return Double(completed) /
+               Double(steps.count)
     }
 }

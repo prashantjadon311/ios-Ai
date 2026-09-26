@@ -55,6 +55,13 @@ final class DashboardViewModel {
                 owner: owner.id,
                 assistantID: assistant.id
             )
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                router.pendingLaunchIntent = ChatLaunchIntent(
+                    conversationID: conv.id,
+                    initialText: trimmed
+                )
+            }
             router.openChat(conversationID: conv.id)
         } catch {
             self.error = .unknown(underlying: error.localizedDescription)

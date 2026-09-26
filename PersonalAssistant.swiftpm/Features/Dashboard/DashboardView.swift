@@ -114,7 +114,7 @@ struct DashboardView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .imageScale(.large)
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(AppTheme.Color.accent)
             }
             .disabled(quickAskText.trimmingCharacters(in: .whitespaces).isEmpty)
             .frame(minWidth: AppTheme.minimumTapTarget, minHeight: AppTheme.minimumTapTarget)

@@ -47,28 +47,17 @@ actor ModelRouter {
             return .noneEligible(reason: "External model routing is disabled in Private Only mode. Switch to Cloud Allowed to use cloud providers.")
         }
 
-        var eligible: [(config: ProviderConfiguration, provider: any AssistantModel)] = []
+        var eligible: [(config: ProviderConfiguration, provider: any AssistantModel, modelID: String)] = []
 
         for config in configs {
-            guard config.isEnabled else { continue }
+            guard config.ownerID == ownerID, config.isEnabled else { continue }
+            guard let raw = config.modelOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty, raw != "default" else { continue }
+            let selectedModelID = raw
+
             // Lookup by providerKind rawValue (e.g. "groq", "openRouter") or config ID
             guard let provider = providers[config.providerKind.rawValue] ?? providers[config.id.rawValue.uuidString] else {
                 continue
-            }
-
-            // Capability filtering (S014 / I11)
-            if requirements.needsVision {
-                let modelId = (config.modelOverride ?? "").lowercased()
-                if !modelId.contains("vision") && !modelId.contains("vl") && !modelId.isEmpty {
-                    continue
-                }
-            }
-
-            if requirements.needsTools {
-                let modelId = (config.modelOverride ?? "").lowercased()
-                if modelId.contains("embed") {
-                    continue
-                }
             }
 
             // Key check
@@ -79,15 +68,30 @@ actor ModelRouter {
             let isHealthy = healthMap[config.providerKind.rawValue] ?? healthMap[config.id.rawValue.uuidString] ?? true
             guard isHealthy else { continue }
 
-            eligible.append((config, provider))
+            // Capability check using provider.models() if available
+            if let availableModels = try? await provider.models() {
+                if let descriptor = availableModels.first(where: { $0.id == selectedModelID }) {
+                    if requirements.needsVision && descriptor.capabilities.vision != .yes {
+                        continue
+                    }
+                    if requirements.needsTools && descriptor.capabilities.tools != .yes {
+                        continue
+                    }
+                } else if requirements.needsVision || requirements.needsTools {
+                    continue
+                }
+            } else if requirements.needsVision || requirements.needsTools {
+                continue
+            }
+
+            eligible.append((config, provider, selectedModelID))
         }
 
         guard let first = eligible.first else {
             return .noneEligible(reason: "No eligible provider with valid credentials found matching capabilities")
         }
 
-        let modelID = first.config.modelOverride ?? "default"
-        return .selected(provider: first.provider, modelID: modelID)
+        return .selected(provider: first.provider, modelID: first.modelID)
     }
 
     // MARK: - Health update

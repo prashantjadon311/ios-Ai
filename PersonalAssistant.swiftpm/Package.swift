@@ -9,6 +9,7 @@ import AppleProductTypes
 
 let package = Package(
     name: "PersonalAssistant",
+    defaultLocalization: "en",
     platforms: [
         .iOS("18.6")
     ],

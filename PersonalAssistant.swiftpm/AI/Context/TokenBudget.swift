@@ -12,6 +12,10 @@ struct TokenBudgetEstimator: Sendable {
         return max(1, (bytes + 2) / 3)
     }
 
+    func estimateTokens(for text: String) -> Int {
+        Self.estimateTokens(for: text)
+    }
+
     static func fitsInBudget(messages: [ContextMessage], maxTokens: Int = 4096) -> Bool {
         var total = 0
         for msg in messages {

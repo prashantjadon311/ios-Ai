@@ -1,0 +1,105 @@
+# Place under .github/workflows/ios-real-compiler-probe.yml only after review.
+# One Apple job: diagnostic shadow-build unblocks real compiler if Playgrounds
+# still regenerates an invalid manifest; release remains RED until ORIGINAL builds.
+name: ios-real-compiler-probe
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'repair/**'
+permissions:
+  contents: read
+jobs:
+  apple-app-build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record exact candidate and select installed compatible Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          git status --porcelain=v1
+          chosen=''
+          for app in /Applications/Xcode_26.3.app /Applications/Xcode_26.2.app /Applications/Xcode_26.1.1.app /Applications/Xcode_26.0.1.app /Applications/Xcode_26.app; do
+            if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
+          done
+          if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi
+          sudo xcode-select -s "$chosen/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun --sdk iphonesimulator --show-sdk-version
+      - name: Check ORIGINAL app candidate manifest and resources
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f PersonalAssistant.swiftpm/Package.swift
+          test -f PersonalAssistant.swiftpm/Resources/en.lproj/Localizable.strings
+          test -f PersonalAssistant.swiftpm/Resources/hi.lproj/Localizable.strings
+          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Maya.imageset/Maya.png
+          test -f PersonalAssistant.swiftpm/Resources/Assets.xcassets/Saar.imageset/Saar.png
+          if grep -Eq 'defaultLocalization:[[:space:]]*"en"' PersonalAssistant.swiftpm/Package.swift; then
+            echo 'fixed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'fixed=false' >> "$GITHUB_OUTPUT"
+            echo 'Original Playgrounds manifest still missing defaultLocalization: shipping blocked.'
+          fi
+      - name: Prepare disposable diagnostic copy ONLY if shipping manifest is blocked
+        if: steps.manifest.outputs.fixed == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/diagnostic"
+          cp -R PersonalAssistant.swiftpm "$RUNNER_TEMP/diagnostic/PersonalAssistant.swiftpm"
+          python3 - "$RUNNER_TEMP/diagnostic/PersonalAssistant.swiftpm/Package.swift" <<'PYCODE'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]); content=p.read_text()
+          anchor='    name: "PersonalAssistant",'
+          if content.count(anchor)!=1 or 'defaultLocalization:' in content:
+              raise SystemExit('Ambiguous generated manifest; refusing unsafe text patch')
+          p.write_text(content.replace(anchor,anchor+'\n    defaultLocalization: "en",',1))
+          PYCODE
+      - name: Get REAL compiler diagnostics from disposable shadow copy
+        if: steps.manifest.outputs.fixed == 'false'
+        working-directory: ${{ runner.temp }}/diagnostic/PersonalAssistant.swiftpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'SHADOW SOURCE DIAGNOSTICS ONLY. This is not a shipping package build.'
+          xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-scheme-discovery.log"
+          xcodebuild -scheme PersonalAssistant \
+            -destination 'generic/platform=iOS Simulator' \
+            -resultBundlePath "$RUNNER_TEMP/Diagnostic.xcresult" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"
+      - name: Compile ORIGINAL iPad candidate when manifest is fixed
+        if: steps.manifest.outputs.fixed == 'true'
+        working-directory: PersonalAssistant.swiftpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-scheme-discovery.log"
+          # Confirm scheme is real from the previous output. If not, fail clearly
+          # and implement verified Xcode wrapper of the SAME production source.
+          xcodebuild -scheme PersonalAssistant \
+            -destination 'generic/platform=iOS Simulator' \
+            -resultBundlePath "$RUNNER_TEMP/PersonalAssistant.xcresult" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"
+      - name: Fail the shipping gate if original manifest is still invalid
+        if: always() && steps.manifest.outputs.fixed == 'false'
+        shell: bash
+        run: |
+          echo 'SHIPPING_BUILD=FAIL. Diagnostic shadow compile, even if green, never fixes original .swiftpm iPad export.'
+          exit 22
+      - name: Upload actual Apple diagnostics on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-source-and-shipping-evidence-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/ios-scheme-discovery.log
+            ${{ runner.temp }}/ios-app-build.log
+            ${{ runner.temp }}/Diagnostic.xcresult
+            ${{ runner.temp }}/PersonalAssistant.xcresult

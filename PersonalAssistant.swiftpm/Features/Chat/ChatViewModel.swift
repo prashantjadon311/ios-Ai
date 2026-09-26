@@ -58,6 +58,18 @@ final class ChatViewModel {
         }
     }
 
+    private var consumedNonces: Set<UUID> = []
+
+    func submitLaunchOnce(_ intent: ChatLaunchIntent) async {
+        guard let text = intent.initialText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return }
+        guard !consumedNonces.contains(intent.launchNonce) else { return }
+        consumedNonces.insert(intent.launchNonce)
+
+        composerText = text
+        await send()
+    }
+
     // MARK: - Send message
 
     func send() async {
@@ -138,69 +150,83 @@ final class ChatViewModel {
         streamingTask = Task {
             await orchestrator.executeTurn(request: request) { [weak self] event in
                 guard let self else { return }
-                switch event {
-                case .started(let tid, let modelID):
-                    self.streamingText = ""
-                case .textDelta(let delta, _):
-                    self.streamingText += delta
-                case .toolProposalPending:
-                    break
-                case .usageUpdate:
-                    break
-                case .completed(let tid, let reason):
-                    if !self.streamingText.isEmpty {
-                        if let msgs = try? await self.conversationRepository.pageMessages(
-                            owner: owner.id,
-                            conversationID: cid,
-                            cursor: 0
-                        ), !msgs.isEmpty {
-                            self.messages = msgs
-                        } else {
-                            let finalMsg = MessageRecord(
-                                id: MessageID(),
-                                conversationID: cid,
-                                ownerID: owner.id,
-                                traceID: traceID,
-                                role: .assistant,
-                                parts: [.text(self.streamingText)],
-                                source: .assistantGenerated,
-                                sensitivity: .personal,
-                                status: .complete,
-                                createdAt: Date(),
-                                updatedAt: Date(),
-                                sequenceNumber: self.messages.count
-                            )
-                            self.messages.append(finalMsg)
-                        }
-                    }
-                    self.isStreaming = false
-                    self.streamingText = ""
-                case .interrupted(let tid, let reason):
-                    if !self.streamingText.isEmpty {
-                        let finalMsg = MessageRecord(
-                            id: MessageID(),
-                            conversationID: cid,
-                            ownerID: owner.id,
-                            traceID: traceID,
-                            role: .assistant,
-                            parts: [.text(self.streamingText + "\n[Interrupted: \(reason)]")],
-                            source: .assistantGenerated,
-                            sensitivity: .personal,
-                            status: .interrupted,
-                            createdAt: Date(),
-                            updatedAt: Date(),
-                            sequenceNumber: self.messages.count
-                        )
-                        self.messages.append(finalMsg)
-                    }
-                    self.isStreaming = false
-                    self.streamingText = ""
-                case .failed(_, let err):
-                    self.error = err
-                    self.isStreaming = false
-                    self.streamingText = ""
+                await self.handleTurnEvent(
+                    event,
+                    ownerID: owner.id,
+                    conversationID: cid,
+                    traceID: traceID
+                )
+            }
+        }
+    }
+
+    private func handleTurnEvent(
+        _ event: TurnUIEvent,
+        ownerID: UserID,
+        conversationID: ConversationID,
+        traceID: TraceID
+    ) async {
+        switch event {
+        case .started:
+            self.streamingText = ""
+        case .textDelta(let delta, _):
+            self.streamingText += delta
+        case .toolProposalPending:
+            break
+        case .usageUpdate:
+            break
+        case .completed(let tid, let reason):
+            if !self.streamingText.isEmpty {
+                if let msgs = try? await self.conversationRepository.pageMessages(
+                    owner: ownerID,
+                    conversationID: conversationID,
+                    cursor: 0
+                ), !msgs.isEmpty {
+                    self.messages = msgs
+                } else {
+                    let finalMsg = MessageRecord(
+                        id: MessageID(),
+                        conversationID: conversationID,
+                        ownerID: ownerID,
+                        traceID: traceID,
+                        role: .assistant,
+                        parts: [.text(self.streamingText)],
+                        source: .assistantGenerated,
+                        sensitivity: .personal,
+                        status: .complete,
+                        createdAt: Date(),
+                        updatedAt: Date(),
+                        sequenceNumber: self.messages.count
+                    )
+                    self.messages.append(finalMsg)
                 }
             }
+            self.isStreaming = false
+            self.streamingText = ""
+        case .interrupted(_, let reason):
+            if !self.streamingText.isEmpty {
+                let finalMsg = MessageRecord(
+                    id: MessageID(),
+                    conversationID: conversationID,
+                    ownerID: ownerID,
+                    traceID: traceID,
+                    role: .assistant,
+                    parts: [.text(self.streamingText + "\n[Interrupted: \(reason)]")],
+                    source: .assistantGenerated,
+                    sensitivity: .personal,
+                    status: .interrupted,
+                    createdAt: Date(),
+                    updatedAt: Date(),
+                    sequenceNumber: self.messages.count
+                )
+                self.messages.append(finalMsg)
+            }
+            self.isStreaming = false
+            self.streamingText = ""
+        case .failed(_, let err):
+            self.error = err
+            self.isStreaming = false
+            self.streamingText = ""
         }
     }
 

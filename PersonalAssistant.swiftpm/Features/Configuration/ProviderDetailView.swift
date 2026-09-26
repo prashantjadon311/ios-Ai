@@ -17,7 +17,7 @@ struct ProviderDetailView: View {
 
     var body: some View {
         Form {
-            Section("API Credentials") {
+            Section {
                 SecureField("API Key", text: $apiKey)
                     .accessibilityLabel("API Key input")
 
@@ -33,6 +33,8 @@ struct ProviderDetailView: View {
                 }
                 .disabled(apiKey.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 .buttonStyle(.borderedProminent)
+            } header: {
+                Text("API Credentials")
             } footer: {
                 Text("API keys are stored securely in your local device Keychain and transmitted directly to \(providerName) exclusively as an Authorization header during AI turns.")
                     .font(.footnote)

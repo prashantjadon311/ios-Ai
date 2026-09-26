@@ -2,7 +2,7 @@ name: iOS Build & Verify
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'repair/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -31,17 +31,29 @@ jobs:
 
   build-ios:
     name: Xcode iOS Build Verification
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        run: sudo xcode-select -s /Applications/Xcode_16.0.app || sudo xcode-select -s /Applications/Xcode_15.4.app
+      - name: Select installed compatible Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          chosen=''
+          for app in /Applications/Xcode_26.1.1.app /Applications/Xcode_26.0.1.app /Applications/Xcode_26.2.app /Applications/Xcode_26.3.app /Applications/Xcode_26.1.app /Applications/Xcode_26.0.app /Applications/Xcode.app /Applications/Xcode_16.4.app /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app; do
+            if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
+          done
+          if [[ -z "$chosen" ]]; then echo "No compatible Xcode found"; exit 77; fi
+          sudo xcode-select -s "$chosen/Contents/Developer"
+          export DEVELOPER_DIR="$chosen/Contents/Developer"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          xcodebuild -version
 
       - name: Build Swift Playgrounds App Target
         working-directory: PersonalAssistant.swiftpm
         run: |
+          set -euo pipefail
           xcodebuild -scheme PersonalAssistant \
             -destination "generic/platform=iOS Simulator" \
             CODE_SIGNING_ALLOWED=NO \

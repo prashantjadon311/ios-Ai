@@ -145,11 +145,11 @@ final class AppSession {
 
     func updatePrivacyMode(_ mode: PrivacyMode) async throws {
         guard let owner = currentProfile else { throw AppError.notAuthenticated }
-        var prefs = preferences ?? AppPreference(ownerID: owner.id)
-        prefs.privacyMode = mode
-        prefs.updatedAt = Date()
-        preferences = prefs
-        try await configurationRepository.savePreferences(prefs)
+        var next = preferences ?? AppPreference(ownerID: owner.id)
+        next.privacyMode = mode
+        next.updatedAt = Date()
+        try await configurationRepository.savePreferences(next)
+        preferences = next
     }
 
     // MARK: - Lock

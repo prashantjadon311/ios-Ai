@@ -22,6 +22,6 @@ actor AppleFoundationModelProvider: AssistantModel {
     }
 
     func stream(_ request: AssistantRequest) async throws -> AsyncThrowingStream<AssistantEvent, Error> {
-        throw AppError.unsupportedCapability(name: "Apple Foundation Models unavailable on current hardware")
+        throw AppError.unsupportedCapability("Apple Foundation Models unavailable on current hardware")
     }
 }
