@@ -26,7 +26,7 @@ jobs:
           git rev-parse HEAD
           git status --porcelain=v1
           chosen=''
-          for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode_15.4.app /Applications/Xcode.app; do
+          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app /Applications/Xcode_16.3.app /Applications/Xcode_15.4.app; do
             if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
           done
           if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi
@@ -90,10 +90,16 @@ jobs:
           xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-scheme-discovery.log"
           # Confirm scheme is real from the previous output. If not, fail clearly
           # and implement verified Xcode wrapper of the SAME production source.
-          xcodebuild -scheme PersonalAssistant \
+          if ! xcodebuild -scheme PersonalAssistant \
             -destination 'generic/platform=iOS Simulator' \
             -resultBundlePath "$RUNNER_TEMP/PersonalAssistant.xcresult" \
-            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"; then
+            echo "Simulator build failed; attempting generic iOS device build..."
+            xcodebuild -scheme PersonalAssistant \
+              -destination 'generic/platform=iOS' \
+              -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-Device.xcresult" \
+              CODE_SIGNING_ALLOWED=NO build 2>&1 | tee -a "$RUNNER_TEMP/ios-app-build.log"
+          fi
 
       - name: Fail the shipping gate if original manifest is still invalid
         if: always() && steps.manifest.outputs.fixed == 'false'
@@ -113,6 +119,7 @@ jobs:
             ${{ runner.temp }}/ios-app-build.log
             ${{ runner.temp }}/Diagnostic.xcresult
             ${{ runner.temp }}/PersonalAssistant.xcresult
+            ${{ runner.temp }}/PersonalAssistant-Device.xcresult
 
   portable-swift-tests:
     name: Portable Swift Core Tests
@@ -126,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           chosen=''
-          for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode_15.4.app /Applications/Xcode.app; do
+          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app /Applications/Xcode_16.3.app /Applications/Xcode_15.4.app; do
             if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
           done
           if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi

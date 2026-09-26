@@ -91,7 +91,12 @@ struct SSEDecoder {
         var frames: [SSEFrame] = []
         while true {
             // Find LF byte
-            guard let lfIndex = buffer.firstIndex(of: 0x0A) else { break }
+            guard let lfIndex = buffer.firstIndex(of: 0x0A) else {
+                if buffer.count > maxFrameBytes {
+                    throw DecoderError.frameTooLarge(size: buffer.count, limit: maxFrameBytes)
+                }
+                break
+            }
             // Slice raw line (may include trailing CR)
             let rawLine = buffer[buffer.startIndex..<lfIndex]
             buffer = buffer[(lfIndex + 1)...]  // advance past LF
