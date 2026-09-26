@@ -1,39 +1,43 @@
 // Avatar/AvatarAssetCatalog.swift
-// Color palettes and asset lookups for Maya and Saar identities.
-// Per V3 §Avatar/AvatarAssetCatalog.swift blueprint.
+// Resolve installed built-in and user-selected avatar assets.
+// Per V3 §Avatar/AvatarAssetCatalog.swift and §B04/W04.
 
+import Foundation
 import SwiftUI
 
-enum AvatarIdentity: String, Sendable, CaseIterable {
-    case maya = "Maya"
-    case saar = "Saar"
-}
+/// Resolves avatar images, colors, and fallback representations.
+/// Does not couple avatar gender with voice gender.
+enum AvatarAssetCatalog {
 
-struct AvatarAssetCatalog {
-    static func primaryColor(for identity: AvatarIdentity) -> Color {
-        switch identity {
-        case .maya:
-            return Color.purple
-        case .saar:
-            return Color.teal
+    /// Returns asset name or system icon fallback for the given avatar role.
+    static func assetName(for role: AvatarRole) -> String {
+        switch role {
+        case .maya: return "Maya"
+        case .saar: return "Saar"
         }
     }
 
-    static func secondaryColor(for identity: AvatarIdentity) -> Color {
-        switch identity {
-        case .maya:
-            return Color.pink.opacity(0.8)
-        case .saar:
-            return Color.cyan.opacity(0.8)
+    /// System image fallback if bundled image asset is absent.
+    static func systemFallbackIcon(for role: AvatarRole) -> String {
+        switch role {
+        case .maya: return "person.crop.circle.fill"
+        case .saar: return "person.crop.circle.fill"
         }
     }
 
-    static func systemImage(for identity: AvatarIdentity) -> String {
-        switch identity {
+    /// Accent gradient colors for avatar aura during animations.
+    static func glowColors(for role: AvatarRole) -> [SwiftUI.Color] {
+        switch role {
         case .maya:
-            return "person.crop.circle.fill"
+            return [
+                SwiftUI.Color(hue: 0.55, saturation: 0.8, brightness: 0.9),
+                SwiftUI.Color(hue: 0.65, saturation: 0.6, brightness: 0.8)
+            ]
         case .saar:
-            return "brain.head.profile"
+            return [
+                SwiftUI.Color(hue: 0.08, saturation: 0.8, brightness: 0.9),
+                SwiftUI.Color(hue: 0.15, saturation: 0.7, brightness: 0.85)
+            ]
         }
     }
 }

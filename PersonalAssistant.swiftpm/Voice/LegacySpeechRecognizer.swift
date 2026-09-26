@@ -6,6 +6,9 @@ import Foundation
 #if canImport(Speech)
 import Speech
 #endif
+#if canImport(AVFAudio)
+import AVFAudio
+#endif
 
 actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
     #if canImport(Speech)
@@ -14,18 +17,17 @@ actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
     #endif
 
     func startRecognition(locale: Locale) async throws -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            #if canImport(Speech)
-            guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
-                continuation.finish(throwing: AppError.unsupportedCapability("Speech recognition unavailable for locale \(locale.identifier)"))
-                return
-            }
+        #if canImport(Speech)
+        guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+            throw AppError.unsupportedCapability("Speech recognition unavailable for locale \(locale.identifier)")
+        }
 
-            let request = SFSpeechAudioBufferRecognitionRequest()
-            request.shouldReportPartialResults = true
-            self.recognitionRequest = request
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        self.recognitionRequest = request
 
-            self.recognitionTask = recognizer.recognitionTask(with: request) { result, error in
+        return AsyncThrowingStream { continuation in
+            let task = recognizer.recognitionTask(with: request) { result, error in
                 if let error = error {
                     continuation.finish(throwing: error)
                     return
@@ -37,10 +39,15 @@ actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
                     }
                 }
             }
-            #else
-            continuation.finish(throwing: AppError.unsupportedCapability("Speech framework not available"))
-            #endif
+
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+                request.endAudio()
+            }
         }
+        #else
+        throw AppError.unsupportedCapability("Speech framework not available")
+        #endif
     }
 
     func stopRecognition() async {

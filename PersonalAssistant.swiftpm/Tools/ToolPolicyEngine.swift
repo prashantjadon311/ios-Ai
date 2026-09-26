@@ -75,6 +75,8 @@ struct ToolPolicyEngine: Sendable {
             humanReadableSummary: humanReadable(definition: definition, args: proposal.argumentsJSON),
             recipient: definition.name,
             dataClasses: [.personal],  // W09 will inspect args for classification
+            canonicalArguments: proposal.argumentsJSON,
+            sessionGeneration: session.generation,
             expiresAt: Date().addingTimeInterval(120)  // 2-minute approval window
         )
         return .ask(approvalRequest)

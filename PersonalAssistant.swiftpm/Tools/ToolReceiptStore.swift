@@ -28,7 +28,7 @@ actor ToolReceiptStore {
         ownerID: UserID,
         traceID: TraceID,
         operationKey: String
-    ) async -> ToolReceipt {
+    ) async throws -> ToolReceipt {
         let receipt = ToolReceipt(
             id: id,
             invocationID: invocationID,
@@ -46,7 +46,7 @@ actor ToolReceiptStore {
         inMemoryCache[id] = receipt
 
         if let modelContainer {
-            await MainActor.run {
+            try await MainActor.run {
                 let ctx = modelContainer.mainContext
                 let stored = StoredToolReceipt(
                     id: id,
@@ -62,7 +62,7 @@ actor ToolReceiptStore {
                     updatedAt: receipt.updatedAt
                 )
                 ctx.insert(stored)
-                try? ctx.save()
+                try ctx.save()
             }
         }
 

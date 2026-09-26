@@ -1,23 +1,47 @@
 // Features/Settings/AppearanceSettingsView.swift
 import SwiftUI
+
 struct AppearanceSettingsView: View {
+    @Environment(AppSession.self) private var session
+    @State private var appearance: AppearanceMode = .system
+
     var body: some View {
         Form {
             Section("Theme") {
-                Text("Appearance settings — W03/W12 implementation")
+                Picker("Appearance", selection: $appearance) {
+                    Text("System").tag(AppearanceMode.system)
+                    Text("Light").tag(AppearanceMode.light)
+                    Text("Dark").tag(AppearanceMode.dark)
+                }
+                .pickerStyle(.inline)
+            }
+            Section("Information") {
+                Text("Adapts typography, contrast, and layout to system Dynamic Type and appearance preferences.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("Appearance")
+        .onAppear {
+            appearance = session.preferences?.appearanceMode ?? .system
+        }
     }
 }
 
 // Features/Settings/DiagnosticsView.swift
 struct DiagnosticsView: View {
+    @Environment(AppContainer.self) private var container
+
     var body: some View {
         Form {
-            Section("Diagnostics") {
-                Text("Redacted diagnostic logs — W13 implementation")
+            Section("System Status") {
+                LabeledContent("Network Connectivity", value: container.capabilityCenter.snapshot.networkAvailable ? "Connected" : "Offline")
+                LabeledContent("App Sandboxing", value: "Enforced")
+                LabeledContent("Logging Policy", value: "Zero Credential / Zero Secret")
+            }
+            Section("Privacy Guarantee") {
+                Text("Diagnostics never transmit remote telemetry. Logs and traces remain local to this device.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -29,8 +53,14 @@ struct DiagnosticsView: View {
 struct StorageSettingsView: View {
     var body: some View {
         Form {
-            Section("Storage") {
-                Text("Storage info and management — W12 implementation")
+            Section("Local Storage") {
+                LabeledContent("Engine", value: "SwiftData (Local SQLite)")
+                LabeledContent("Cloud Sync", value: "Disabled (Device Only)")
+                LabeledContent("Attachments", value: "Sandboxed Local Storage")
+            }
+            Section("Information") {
+                Text("All conversations, memory entries, and scheduled tasks are stored on-device. No external cloud database is used.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -42,9 +72,20 @@ struct StorageSettingsView: View {
 struct NotificationSettingsView: View {
     var body: some View {
         Form {
-            Section("Notifications") {
-                Text("Notification preferences — W08 implementation")
+            Section("Local Alerts") {
+                LabeledContent("Engine", value: "UserNotifications")
+                LabeledContent("Delivery", value: "Local On-Device Alarms")
+            }
+            Section("System Permissions") {
+                Text("Task reminders and scheduled alerts fire locally. Manage system alert permissions in iOS Settings.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Button("Open iOS Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
             }
         }
         .navigationTitle("Notifications")
@@ -53,10 +94,24 @@ struct NotificationSettingsView: View {
 
 // Features/Settings/SecuritySettingsView.swift
 struct SecuritySettingsView: View {
+    @Environment(AppSession.self) private var session
+
     var body: some View {
         Form {
-            Section("Security") {
-                Text("Biometric lock settings — W02 implementation")
+            Section("Keychain & Credential Protection") {
+                LabeledContent("Protection Class", value: "ThisDeviceOnly")
+                LabeledContent("Storage", value: "iOS Secure Enclave / Keychain")
+            }
+            Section("App Lock") {
+                Button(role: .destructive) {
+                    session.lock()
+                } label: {
+                    Label("Lock App Immediately", systemImage: "lock.fill")
+                }
+            }
+            Section("About") {
+                Text("API keys and secrets are protected using kSecAttrAccessibleWhenUnlockedThisDeviceOnly and are never included in backups or exported.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }

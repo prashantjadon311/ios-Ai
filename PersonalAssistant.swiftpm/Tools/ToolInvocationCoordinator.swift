@@ -16,8 +16,22 @@ actor ToolInvocationCoordinator {
 
     func executeCall(
         authorizedCall: AuthorizedToolCall,
+        currentSession: SessionToken? = nil,
         executor: @Sendable (Data) async throws -> String
     ) async throws -> String {
+        // Expiration check
+        if Date() > authorizedCall.expiresAt {
+            throw AppError.approvalExpired(invocationID: authorizedCall.invocationID)
+        }
+
+        // Session generation check
+        if let currentSession, currentSession.generation != authorizedCall.sessionGeneration {
+            throw AppError.sessionChanged(
+                expectedGeneration: authorizedCall.sessionGeneration,
+                currentGeneration: currentSession.generation
+            )
+        }
+
         let opKey = authorizedCall.invocationID.uuidString
 
         // 0. Idempotency check: prevent duplicate execution of the same operation key
@@ -33,7 +47,7 @@ actor ToolInvocationCoordinator {
         }
 
         // 1. Commit durable PREPARED receipt before any side effect
-        _ = await receiptStore.recordPrepared(
+        _ = try await receiptStore.recordPrepared(
             id: authorizedCall.invocationID,
             invocationID: authorizedCall.invocationID,
             toolID: authorizedCall.toolID,

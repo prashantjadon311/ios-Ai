@@ -89,26 +89,32 @@ actor ConfigurationRepository {
         prefs.appearanceMode = appearance
         prefs.localeIdentifier = stored.localeIdentifier
         prefs.updatedAt = stored.updatedAt
+        if let records = try? JSONDecoder().decode([ConsentRecord].self, from: stored.consentsData) {
+            var consentMap: [DataEgressDestination: ConsentRecord] = [:]
+            for record in records {
+                consentMap[record.destination] = record
+            }
+            prefs.consents = consentMap
+        }
         return prefs
     }
 
     func savePreferences(_ prefs: AppPreference) async throws {
         let ownerUUID = prefs.ownerID.rawValue
+        let consentsData = (try? JSONEncoder().encode(Array(prefs.consents.values))) ?? Data()
         try await MainActor.run {
             let descriptor = FetchDescriptor<StoredAppPreference>(
                 predicate: #Predicate { $0.ownerID == ownerUUID }
             )
-            let stored: StoredAppPreference
             if let existing = try context.fetch(descriptor).first {
                 existing.privacyModeRaw = prefs.privacyMode.rawValue
+                existing.consentsData = consentsData
                 existing.activeAssistantIDRaw = prefs.activeAssistantID?.rawValue
                 existing.appearanceModeRaw = prefs.appearanceMode.rawValue
                 existing.localeIdentifier = prefs.localeIdentifier
                 existing.updatedAt = prefs.updatedAt
-                stored = existing
             } else {
-                let consentsData = (try? JSONEncoder().encode(Array(prefs.consents.values))) ?? Data()
-                stored = StoredAppPreference(
+                let stored = StoredAppPreference(
                     ownerID: ownerUUID,
                     privacyModeRaw: prefs.privacyMode.rawValue,
                     consentsData: consentsData,

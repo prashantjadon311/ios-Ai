@@ -15,8 +15,12 @@ struct OpenURLTool: Sendable {
         requiresApproval: true
     )
 
-    func execute(url: URL) throws -> String {
+    func execute(url: URL) async throws -> String {
         try URLSafetyValidator.validateDestination(url)
+        let success = await URLLauncher.openURL(url)
+        guard success else {
+            throw AppError.toolExecutionFailed(toolID: definition.toolID, message: "System failed to open URL: \(url.absoluteString)")
+        }
         return "Opened validated URL: \(url.absoluteString)"
     }
 }

@@ -94,9 +94,14 @@ actor AssistantOrchestrator {
 
                         case .usage(let input, let output, let cost):
                             let usage = UsageEstimate(
-                                inputTokens: input ?? 0,
-                                outputTokens: output ?? 0,
-                                estimatedCostUSD: cost
+                                traceID: traceID,
+                                providerID: provider.providerID,
+                                modelID: modelID,
+                                inputTokens: input,
+                                outputTokens: output,
+                                estimatedCostUSD: cost,
+                                isActual: true,
+                                recordedAt: Date()
                             )
                             await onEvent(.usageUpdate(usage))
 

@@ -23,4 +23,22 @@ actor CalendarAdapter {
         return false
         #endif
     }
+
+    func createEvent(title: String, startDate: Date, endDate: Date) async throws -> String {
+        #if canImport(EventKit)
+        let hasAccess = try await requestAccess()
+        guard hasAccess else {
+            throw AppError.permissionDenied(resource: "Calendars (EventKit permission denied)")
+        }
+        let event = EKEvent(eventStore: store)
+        event.title = title
+        event.startDate = startDate
+        event.endDate = endDate
+        event.calendar = store.defaultCalendarForNewEvents
+        try store.save(event, span: .thisEvent)
+        return event.eventIdentifier ?? UUID().uuidString
+        #else
+        throw AppError.permissionDenied(resource: "EventKit unavailable on this platform")
+        #endif
+    }
 }

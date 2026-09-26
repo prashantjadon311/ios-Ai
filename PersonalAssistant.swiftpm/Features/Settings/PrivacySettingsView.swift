@@ -9,7 +9,15 @@ struct PrivacySettingsView: View {
     var body: some View {
         Form {
             Section("Data Privacy Mode") {
-                Picker("Mode", selection: $privacyMode) {
+                Picker("Mode", selection: Binding(
+                    get: { privacyMode },
+                    set: { newMode in
+                        privacyMode = newMode
+                        Task {
+                            try? await session.updatePrivacyMode(newMode)
+                        }
+                    }
+                )) {
                     Text("Cloud Allowed").tag(PrivacyMode.cloudAllowed)
                     Text("Private Only").tag(PrivacyMode.privateOnly)
                 }

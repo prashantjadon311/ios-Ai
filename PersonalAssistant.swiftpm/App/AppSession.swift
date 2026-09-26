@@ -136,10 +136,20 @@ final class AppSession {
         }
         activeAssistant = assistant
         if var prefs = preferences {
-            prefs = AppPreference(ownerID: prefs.ownerID, activeAssistantID: assistant.id)
+            prefs.activeAssistantID = assistant.id
+            prefs.updatedAt = Date()
             preferences = prefs
             try await configurationRepository.savePreferences(prefs)
         }
+    }
+
+    func updatePrivacyMode(_ mode: PrivacyMode) async throws {
+        guard let owner = currentProfile else { throw AppError.notAuthenticated }
+        var prefs = preferences ?? AppPreference(ownerID: owner.id)
+        prefs.privacyMode = mode
+        prefs.updatedAt = Date()
+        preferences = prefs
+        try await configurationRepository.savePreferences(prefs)
     }
 
     // MARK: - Lock

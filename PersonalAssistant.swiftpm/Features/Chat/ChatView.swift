@@ -59,6 +59,16 @@ struct ChatView: View {
     @ViewBuilder
     private func chatComposer(_ vm: ChatViewModel) -> some View {
         HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
+            Button {
+                toggleVoice(vm: vm)
+            } label: {
+                Image(systemName: container.voiceCoordinator.state == .capturing ? "mic.fill" : "mic")
+                    .imageScale(.large)
+                    .foregroundStyle(container.voiceCoordinator.state == .capturing ? .red : .secondary)
+            }
+            .frame(minWidth: AppTheme.minimumTapTarget, minHeight: AppTheme.minimumTapTarget)
+            .accessibilityLabel(container.voiceCoordinator.state == .capturing ? "Stop listening" : "Start voice input")
+
             TextField("Message…", text: Binding(
                 get: { vm.composerText },
                 set: { vm.composerText = $0 }
@@ -93,6 +103,22 @@ struct ChatView: View {
         }
         .padding(AppTheme.Spacing.md)
         .background(AppTheme.Color.secondaryBackground)
+        .onChange(of: container.voiceCoordinator.lastTranscript) { _, newTranscript in
+            if let newTranscript, !newTranscript.isEmpty {
+                vm.composerText = newTranscript
+            }
+        }
+    }
+
+    private func toggleVoice(vm: ChatViewModel) {
+        if container.voiceCoordinator.state == .capturing {
+            container.voiceCoordinator.stop()
+        } else {
+            let cid = vm.activeConversationID ?? ConversationID()
+            Task {
+                await container.voiceCoordinator.begin(conversationID: cid)
+            }
+        }
     }
 
     @ViewBuilder

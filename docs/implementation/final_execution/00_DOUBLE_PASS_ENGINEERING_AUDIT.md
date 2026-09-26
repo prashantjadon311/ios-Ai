@@ -1,0 +1,88 @@
+# ios-Ai V1 — Two-Pass Source Audit and Remediation Register
+
+**Audited GitHub HEAD:** `b34423ec90f705f129d567300a3cbc534f7559e7` (`fourth`, 2026-09-26 04:47 UTC).  
+**Parent:** `5905602c5c504d1d6f9d3a140edc790b77c2cb2f`.  
+**Immutable comparison:** https://github.com/prashantjadon311/ios-Ai/compare/5905602c5c504d1d6f9d3a140edc790b77c2cb2f...b34423ec90f705f129d567300a3cbc534f7559e7  
+**Actual CI:** https://github.com/prashantjadon311/ios-Ai/actions/runs/36218871425  
+**Source prefix:** `PersonalAssistant.swiftpm/` throughout this document.
+
+## Scope, verification levels, and brutal reality check
+
+**Pass A — repository-wide structural/source scan:** retrieved the committed GitHub tree and reviewed the text of all 187 committed `.swift` files in batches for file presence, length, suspicious unfinished implementation, unsafe optional failure handling, role separation and evident dependency seams; also inspected the fourth-commit 36-file diff, resources, docs and workflow. This **was not** 187 independently compiled, line-by-line formal code proofs. Zero committed Swift source files are zero-byte. Many nonempty files contain only skeletal code.
+
+**Pass B — independent cross-module/behavior-contract review:** compared the central types and method signatures with their callers, checked AI/provider/network/Keychain paths, SwiftData/receipt persistence, session/privacy/approval flow, task/voice/media/UI boundaries, the authoritative V3 W00–W14 specifications, the attached Gemini execution report, and **the real GitHub Actions job logs**. Every `CONFIRMED` below is backed by actual committed source or CI evidence. `RISK` means a plausible gap requiring executable tests; `NOT_VERIFIED` means no runtime evidence, not necessarily a defect.
+
+**Verdict:** NOT READY FOR REAL PERSONAL USE. A disposable diagnostic iPad import is useful; do not enter actual API credentials, private files, or important tasks before source remediation, green Mac compilation, behavioral/security tests and device verification. The package can be attempted on iPad now to collect compiler diagnostics; success is not implied.
+
+### Fourth-commit change reality
+
+- **36 changed files, +1,523/-254 text lines.** New CI workflow, context/memory files, attempted streaming orchestrator, changed AppContainer, SwiftData receipt, security/approval/URL checks, deterministic occurrence ID, attachment location, six Maya/Saar PNGs and documentation.
+- **Real gains:** formerly empty `ContextBuilder.swift` and `MemoryProposalEngine.swift` populated; `StoredToolReceipt` added; six avatar PNGs committed; deterministic occurrence key method and persistent attachment directory added. None proves end-to-end integration.
+- **Report/evidence conflict:** Gemini's uploaded report claims documentation 16/16, source-pattern matrix 46/46, chat static suite 4/4 and successful readiness. On the **published HEAD**, GitHub CI produced handoff **16/16 PASS**, source-pattern matrix **42/46**, with S014/T008/T010/T024 failures; the chat script and macOS build were **SKIPPED**. The chat script itself checks source strings, not real Swift behavior. See CI link. Gemini's local result might differ, but the published commit cannot inherit a PASS from an uncommitted local run.
+- **No committed Swift executable test target**, simulator execution, Apple compiler PASS, physical iPad PASS, signed iPhone app or user-owned provider smoke evidence was found at this HEAD.
+
+## Pass A: file-level and evidence findings
+
+| ID | Severity | Proof location | Confirmed problem / required result |
+|---|---|---|---|
+| C01 | P0 | `App/AppContainer.swift` vs `AI/Routing/ModelRouter.swift` | Composition root calls `ModelRouter(keychainVault:initialProviders:)`; router declares `init(keychainVault:)`. Reconcile both under one real contract. |
+| C02 | P0 | `AI/Routing/AssistantOrchestrator.swift` vs router | Orchestrator calls `route(requirements:ownerID:configs:privacyMode:)`; router has no `privacyMode`, no async route and wrong provider registry keys. |
+| C03 | P0 | `AI/Routing/ModelRouter.swift` | Redundant recursive `ProviderConfiguration.id` extension, provider registry by string name but lookup by config UUID, synchronous cross-actor Keychain calls, unknown/default model accepted without capability evidence. |
+| C04 | P0 | `Domain/ApprovalRequest.swift` | Initializer assigns `self.dataClasses` but there is no stored `dataClasses` member. Default `canonicalArguments=Data()` and `sessionGeneration=UUID()` also invalidate exact approval binding. |
+| C05 | P0 | `Tools/ToolInvocationCoordinator.swift` vs `Domain/Errors.swift` | `.toolExecutionFailed(toolID:message:)` is used but not declared in `AppError`. This is an independently confirmed type mismatch. |
+| C06 | P0 | `Avatar/AvatarView.swift` vs `Avatar/AvatarState.swift`, `AvatarAssetCatalog.swift`, `Features/Assistant/AssistantProfileView.swift`, `Features/Dashboard/AssistantHeader.swift` | New `AvatarActivityState`, `.assetName`, `.glowColors` and `(role:state:)` interface do not match existing enum/catalog/call sites using `AvatarState`/`AvatarIdentity`. |
+| C07 | P0 | `AI/Routing/AssistantOrchestrator.swift` vs `Domain/ProviderConfiguration.swift` | `UsageEstimate` constructed without required `traceID`, `providerID`, `modelID`, `isActual`, `recordedAt`. |
+| C08 | P0 | `Features/Configuration/ProviderDetailView.swift` vs `Persistence/ConfigurationRepository.swift` | Call `saveProviderConfig(config)` omits repository's mandatory `session:` argument. |
+| C09 | P0 / compiler probe | `AI/Providers/OpenAICompatibleProvider.swift` | Its `models()` and `stream()` call `KeychainVault.copySecret` without `await` even though the vault is an actor. Concurrency diagnostics must be collected from Apple SDK. |
+| C10 | P0 / compiler probe | `Features/Chat/ChatViewModel.swift`; `Voice/LegacySpeechRecognizer.swift`; `Voice/VoiceCoordinator.swift` | `@Sendable` callback edits MainActor UI state; recognition callback and non-Sendable AVAudio buffers cross concurrency boundaries. Concrete isolation strategy and compiler run required. |
+| C11 | P0 | `.github/workflows/ios-build.yml` | macOS build has `needs: verify` and is skipped whenever Python checks fail. Hardcoded scheme and Xcode paths have never been validated against the generated `.swiftpm`. |
+| C12 | P0 / data integrity | `Persistence/SchemaV1.swift`, `StoreModels.swift`, `AppMigrationPlan.swift` | New `StoredToolReceipt` added to `SchemaV1` without version change/migration fixture. It may open new installs; upgrading existing fourth-parent stores is untested. Never silently reset the store. |
+| B01 | P0 | `AI/Routing/ModelRouter.swift`; `OpenAICompatibleProvider.swift` | Provider registration, owner-bound model discovery, credential namespace and capabilities are inconsistent. `OpenAICompatibleProvider` instances in AppContainer have `ownerID=nil`, so `models()` returns empty; default model IDs are guessed. |
+| B02 | P0 | `AssistantOrchestrator.swift`, `ChatViewModel.swift`, `ConversationRepository.swift` | Provider-stream attempt is real but not integration-ready: `try?` discards checkpoint failures; stream EOF can leave unresolved UI or provider may synthesize `[DONE]` incorrectly; chat appends an in-memory duplicate instead of reloading persisted canonical result. |
+| B03 | P0 | `DashboardViewModel.swift` | `onAsk(text:)` creates a conversation and routes but **never saves or passes `text`**. The claimed quick-ask repair did not reach this commit. |
+| B04 | P1 | `ChatViewModel.swift` | Immutable optional `conversationID` means each later send from new-chat view may create another conversation. Need mutable stable active conversation ID and single-use launch intent. |
+| B05 | P0 security | `Tools/ToolReceiptStore.swift` | `recordPrepared` catches `ctx.save()` with `try?`, returns success on disk failure. Two-phase external dispatch is therefore not actually conditioned on durable PREPARED. No atomic unique-key reservation. |
+| B06 | P0 security | `Tools/ToolInvocationCoordinator.swift` | Read-before-write operation-key check races against concurrent invocations. Missing final owner/session/expiry/digest/privacy/permission validation before side effects. |
+| B07 | P0 security | `Tools/ToolPolicyEngine.swift`; `Security/ApprovalCoordinator.swift` | Only syntactic JSON check, no typed per-tool schema. Approval default blank arguments and unrelated default session generation; hash omits recipient/expiry/scope; UI merely passes stored hash back. |
+| B08 | P0 security | `Features/Approvals/ApprovalCenterView.swift`, `ToolPermissionsView.swift` | Approval page always displays empty state; permission toggles are local view state only. No reliable user-visible authorization/execution path. |
+| B09 | P0 functional | `Tools/CalendarTool.swift`, `OpenURLTool.swift`, other 15-line tool declarations | Calendar claims created without `EKEventStore.save`; URL claims opened without `UIApplication.open`. Other tools are mostly declarations, not working executors. This is fake success and must be removed. |
+| B10 | P0 privacy | `Features/Settings/PrivacySettingsView.swift`, `ConfigurationRepository.swift` | Settings privacy picker does not persist. Preferences retrieval/update don't reconstruct/update persisted consent dictionary; explicit permission decisions can disappear or disagree across screens. |
+| B11 | P0 privacy | `Security/PrivacyPolicyEngine.swift`, router, HTTP client, model adapter | Privacy selection is not a final destination-aware gate before all network content. Default `cloudAllowed` alone must NOT imply per-channel user consent. |
+| B12 | P0 transport | `AI/Transport/HTTPClient.swift`, `Security/URLSafety.swift` | Fourth commit claims redirect delegate but committed HTTP client has none; `deadline` unused; async stream has no `onTermination` cancellation; allowlist defaults to unrestricted empty. String prefix host checks do not solve DNS rebinding. |
+| B13 | P0 transport | `OpenAICompatibleProvider.swift`, `SSEDecoder.swift` | EOF without verified completion is silently treated as successful stop; `decoder.finish()` error swallowed; provider sends hardcoded fallback model IDs; raw role `toolResult` doesn't map correctly to OpenAI role; tool proposals not assembled or exposed. |
+| B14 | P1 context/security | `AI/Context/ContextBuilder.swift`, `ChatViewModel.swift` | Builder is not integrated into chat turn; retrieved memory gets a **system-role** message despite lower trust. Active query and memory sections can exceed token budget. Conversation is selected oldest-first and breaks early. |
+| B15 | P1 state/security | `App/AppSession.swift`, `Persistence/ConversationRepository.swift`, `ConfigurationRepository.swift` | Session token accepted by several repository writes but not compared to CURRENT generation. Switching assistants/profiles must invalidate stale responses and preserve ALL preferences. Initial local profile is NOT a remote authenticated family account. |
+| B16 | P1 credential | `Security/KeychainVault.swift`, `ProviderDetailView.swift` | Rotation deletes existing key before confirmed new write; owner-wide deletion enumerates provider-kind strings rather than actual custom config refs; UI incorrectly promises provider API key is never sent to any server (it is sent to selected provider). |
+| B17 | P1 tasks | `Tasks/TaskScheduler.swift`, `TaskRecurrence.swift`, `Persistence/TaskRepository.swift` | Deterministic occurrence function added, but legacy overload still defaults to random UUID. TaskRepository falls back to new random UUID on corrupted persisted key, and `scheduledAt=Date()` rather than intended fire time. DST/month-end/end-condition fixtures not executed. |
+| B18 | P1 tasks | `Tasks/LocalReminderScheduler.swift`, `TaskEditorView.swift`, `TaskEngineActor.swift` | Notification ID is only task ID rather than occurrence; recurrent notification reconciliation and permission-denied UI incomplete; failure silently ignored by editor. Notification delivery is NOT unattended AI execution. |
+| B19 | P1 voice | `Voice/VoiceCoordinator.swift`, `MicrophoneCapture.swift`, `LegacySpeechRecognizer.swift`, `Features/Chat/ChatView.swift` | Recording starts before recognizer start; initial audio can be lost. Main Chat view has no visible microphone button and no transcribe→composer→send→TTS integration. iPad microphone/Speech purpose strings must be verified in actual app settings. |
+| B20 | P1 media | `Media/AttachmentLifecycle.swift`, `AttachmentValidator.swift`, `Persistence/AttachmentRepository.swift` | Persistent Application Support fixes age purge, but files not owner-namespaced, deletion accepts arbitrary provided URL without root/owner verification, MIME sniff is partial, data protection/deletion cascade not proven. |
+| B21 | P1 UX | `Features/Settings/SettingsSubViews.swift`, `ApprovalCenterView.swift`, `SettingsView.swift` | Appearance, Diagnostics, Storage, Notifications and Security visibly say `Wxx implementation`; disabled Clear All Data means mandated deletion/export is not implemented. Enabling placeholder controls would mislead users. |
+| B22 | P1 resources | `Resources/Assets.xcassets`, `Avatar/AvatarView.swift`, `Package.swift` | Maya/Saar PNGs exist, but their rendering API is inconsistent. App icon is still `.placeholder(icon:.smiley)`. Assets are geometric emblems, not lifelike avatars; advertise them accurately. |
+| B23 | P1 testing | `scratch/test_chat_slice.py`, `scratch/verify_matrix.py`, `.github/workflows/ios-build.yml` | Python files inspect Swift text, not running app behavior; latest CI is red. Create executable Swift fixtures and Apple build, don't weaken static checks to manufacture PASS. |
+| B24 | P1 fallback | `AI/Providers/AppleFoundationModelProvider.swift`, `App/CapabilityCenter.swift` | OS import/presence isn't proof that model is supported/available on iPad. Future/conditional feature must check exact SDK API, supported hardware, language, model readiness; keep hidden if unsupported. |
+
+## Pass B: mandatory cross-path negative verification
+
+A second independent review of the repair must check these interactions, **not just the individual files**:
+
+| Cross-path invariant | Mandatory rejection/recovery test |
+|---|---|
+| Chat UI → session → persisted conversation → context → router → provider → SSE → checkpoint → reload | One real/user-owned BYOK turn (only after key/transport security), 2+ turns same conversation, loss during stream, app relaunch showing canonical persisted assistant answer, offline leaves pending safely. |
+| Provider route → private-only/consent → transport | `privateOnly` / missing destination consent / sensitive input / changed active owner => zero outbound bytes, including catalogs/preflight and custom endpoints. |
+| Tool model fragment → normalized args → policy → approval → executable tool → durable ledger | Fragment interrupted => discard; mutated arguments/recipient/Unicode/owner/session/TTL => deny; failed PREPARED commit => zero side effects; simultaneous same opKey => max one dispatch; crash PREPARED => ambiguous and no silent replay. |
+| New V1 SwiftData schema → existing saved store | Fresh create, reopen, upgrade from third-commit schema fixture, corrupt-file recovery/export; NEVER reset/remove store on error. |
+| Task schedule → recurrence/timezone → occurrence reservation → notifications → edit/delete/restart | Test New York DST forward/back, monthly 31st, recurring end condition, duplicate prevention, denied notification, canceled pending IDs, no promises of background model execution. |
+| Mic permission → recognizer ready → audio taps → transcript → send → speech → interruption cleanup | On a real iPad: supported locale, denied/revoked permission, start/stop, app background/phone interruption, no stale callback into switched owner. |
+| Attachment picker → MIME → protected owner storage → optional OCR → context → selected provider | Spoofed PDF/PNG, size/page/time limit, owner-cross read and arbitrary deletion denied, no upload on private-only, cancellation temp cleanup. |
+| V1 screens/toggles → persisted settings/services | Five destinations navigable; Maya/Saar independent prefs persist; every enabled control changes behavior or explicitly displays unsupported reason; no misleading 'success'. |
+| Source → Apple compiler → simulator → physical iPad | Actual fresh `.swiftpm` build, independent CI Mac job, XCTest/Swift Testing fixture run, iPad import/run evidence separately. |
+
+**Two-pass release gate:** This audit supplies a source-derived defect register, not a PASS certificate. After Gemini edits the project, require a fresh independent second pass against **its new commit** with compiler/test/device artifacts, not a repetition of this snapshot's counts.
+
+### Source and documentation authority
+
+- Primary: `docs/spec/v3/00_V3_AUTHORITY_AND_FINDINGS.md`, `12_FINAL_ENGINEERING_DECISIONS.md`, `13_EXACT_EXECUTION_AND_ACCEPTANCE.md`, `14_CRITICAL_ALGORITHMS_AND_RECOVERY.md`, `15_SECURITY_PRIVACY_BACKEND.md`, `02_CANONICAL_CONTRACTS.md` at the pinned audited commit.
+- Supporting: `16_FILE_CONTRACT_INDEX.tsv` (266-entry canonical manifest), `04_FILE_BY_FILE_BUILD_GUIDE.md`, `05_TEST_AND_SECURITY_MATRIX.md`. This correction packet does not secretly redefine the V1/future boundary.
+- User-supplied Gemini report: `Pasted text(20260926-044934).txt`. Its claim of local static checks is **not** equivalent to a tested published release. Do not delete historical reports; write corrected evidence with date/SHA.
+- Verify the local `git rev-parse HEAD`, `git status`, remote HEAD and toolchain **before modifying anything**, because an unpublished local fix may already exist.

@@ -32,6 +32,7 @@ enum AppError: Error, Sendable, Equatable {
     case sideEffectAmbiguous(operationKey: String)
     case toolNotFound(toolID: String)
     case toolVersionMismatch(toolID: String, expected: Int, got: Int)
+    case toolExecutionFailed(toolID: String, message: String)
 
     // Storage
     case storageRecoveryRequired(reason: String)

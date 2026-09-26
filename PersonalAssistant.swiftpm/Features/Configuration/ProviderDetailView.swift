@@ -34,7 +34,7 @@ struct ProviderDetailView: View {
                 .disabled(apiKey.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 .buttonStyle(.borderedProminent)
             } footer: {
-                Text("API keys are stored exclusively in your local device Keychain and never uploaded to any remote server.")
+                Text("API keys are stored securely in your local device Keychain and transmitted directly to \(providerName) exclusively as an Authorization header during AI turns.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -93,7 +93,10 @@ struct ProviderDetailView: View {
                     keychainKey: "\(owner.id.rawValue.uuidString).\(providerID)",
                     isEnabled: isEnabled
                 )
-                try await container.configurationRepository.saveProviderConfig(config)
+                guard let token = session.sessionToken else {
+                    throw AppError.notAuthenticated
+                }
+                try await container.configurationRepository.saveProviderConfig(config, session: token)
                 statusMessage = "Key and provider configuration saved successfully."
                 isError = false
                 apiKey = ""

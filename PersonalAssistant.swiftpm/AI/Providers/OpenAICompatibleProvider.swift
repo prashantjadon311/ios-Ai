@@ -98,7 +98,7 @@ actor OpenAICompatibleProvider: AssistantModel {
             return cache.models
         }
         guard let owner = ownerID else { return [] }
-        let apiKey = try keychainVault.copySecret(ownerID: owner, providerID: providerID)
+        let apiKey = try await keychainVault.copySecret(ownerID: owner, providerID: providerID)
         let modelsURL = baseURL.appendingPathComponent("models")
         let response = try await httpClient.send(request: HTTPRequest(
             url: modelsURL,
@@ -136,7 +136,7 @@ actor OpenAICompatibleProvider: AssistantModel {
     // MARK: - stream()
 
     func stream(_ request: AssistantRequest) async throws -> AsyncThrowingStream<AssistantEvent, Error> {
-        let apiKey = try keychainVault.copySecret(ownerID: request.owner, providerID: providerID)
+        let apiKey = try await keychainVault.copySecret(ownerID: request.owner, providerID: providerID)
 
         // Build wire request
         let messages = request.messages.map { ctx -> OAIMessage in

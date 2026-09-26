@@ -35,6 +35,10 @@ final class AppContainer {
     let toolInvocationCoordinator: ToolInvocationCoordinator
     let approvalCoordinator: ApprovalCoordinator
 
+    // Voice & Command Bus
+    let commandBus: ApplicationCommandBus
+    let voiceCoordinator: VoiceCoordinator
+
     // MARK: - Init
 
     init(modelContainer: ModelContainer) {
@@ -104,6 +108,10 @@ final class AppContainer {
             policyEngine: policyEngine
         )
         self.approvalCoordinator = ApprovalCoordinator()
+
+        let bus = ApplicationCommandBus(session: self.session, router: self.router)
+        self.commandBus = bus
+        self.voiceCoordinator = VoiceCoordinator(capabilityCenter: self.capabilityCenter, commandBus: bus)
 
         // Reconcile any orphaned PREPARED tool operations from previous run
         Task {

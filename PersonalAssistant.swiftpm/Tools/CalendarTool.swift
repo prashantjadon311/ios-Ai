@@ -16,10 +16,13 @@ struct CalendarTool: Sendable {
     )
 
     func execute(eventTitle: String, startDate: Date, endDate: Date, adapter: CalendarAdapter) async throws -> String {
-        let hasAccess = try await adapter.requestAccess()
-        guard hasAccess else {
+        do {
+            let eventID = try await adapter.createEvent(title: eventTitle, startDate: startDate, endDate: endDate)
+            return "Created calendar event: \(eventTitle) (id: \(eventID))"
+        } catch let appErr as AppError {
+            throw appErr
+        } catch {
             throw AppError.permissionDenied(resource: "Calendars (EventKit permission denied)")
         }
-        return "Created calendar event: \(eventTitle)"
     }
 }

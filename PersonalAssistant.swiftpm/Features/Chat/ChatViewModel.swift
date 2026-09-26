@@ -14,8 +14,8 @@ final class ChatViewModel {
     private(set) var error: AppError?
     var composerText: String = ""
     var conversation: Conversation?
+    private(set) var activeConversationID: ConversationID?
 
-    private let conversationID: ConversationID?
     private let session: AppSession
     private let conversationRepository: ConversationRepository
     private let keychainVault: KeychainVault
@@ -35,7 +35,7 @@ final class ChatViewModel {
         orchestrator: AssistantOrchestrator,
         configurationRepository: ConfigurationRepository
     ) {
-        self.conversationID = conversationID
+        self.activeConversationID = conversationID
         self.session = session
         self.conversationRepository = conversationRepository
         self.keychainVault = keychainVault
@@ -47,7 +47,7 @@ final class ChatViewModel {
     // MARK: - Load
 
     func load() async {
-        guard let cid = conversationID,
+        guard let cid = activeConversationID,
               let owner = session.currentProfile else { return }
         do {
             messages = try await conversationRepository.pageMessages(
@@ -72,7 +72,7 @@ final class ChatViewModel {
 
         // Ensure conversation exists
         let cid: ConversationID
-        if let existing = conversationID {
+        if let existing = activeConversationID {
             cid = existing
         } else {
             guard let assistant = session.activeAssistant else { return }
@@ -81,6 +81,7 @@ final class ChatViewModel {
                     owner: owner.id, assistantID: assistant.id
                 )
                 conversation = conv
+                activeConversationID = conv.id
                 cid = conv.id
             } catch {
                 self.error = .unknown(underlying: error.localizedDescription)
@@ -148,21 +149,29 @@ final class ChatViewModel {
                     break
                 case .completed(let tid, let reason):
                     if !self.streamingText.isEmpty {
-                        let finalMsg = MessageRecord(
-                            id: MessageID(),
+                        if let msgs = try? await self.conversationRepository.pageMessages(
+                            owner: owner.id,
                             conversationID: cid,
-                            ownerID: owner.id,
-                            traceID: traceID,
-                            role: .assistant,
-                            parts: [.text(self.streamingText)],
-                            source: .assistantGenerated,
-                            sensitivity: .personal,
-                            status: .complete,
-                            createdAt: Date(),
-                            updatedAt: Date(),
-                            sequenceNumber: self.messages.count
-                        )
-                        self.messages.append(finalMsg)
+                            cursor: 0
+                        ), !msgs.isEmpty {
+                            self.messages = msgs
+                        } else {
+                            let finalMsg = MessageRecord(
+                                id: MessageID(),
+                                conversationID: cid,
+                                ownerID: owner.id,
+                                traceID: traceID,
+                                role: .assistant,
+                                parts: [.text(self.streamingText)],
+                                source: .assistantGenerated,
+                                sensitivity: .personal,
+                                status: .complete,
+                                createdAt: Date(),
+                                updatedAt: Date(),
+                                sequenceNumber: self.messages.count
+                            )
+                            self.messages.append(finalMsg)
+                        }
                     }
                     self.isStreaming = false
                     self.streamingText = ""
