@@ -26,14 +26,23 @@ jobs:
           git rev-parse HEAD
           git status --porcelain=v1
           chosen=''
-          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app /Applications/Xcode_16.3.app /Applications/Xcode_15.4.app; do
-            if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
+          for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode.app; do
+            if [[ -d "$app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs" ]] && \
+               ls "$app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs" 2>/dev/null | grep -q "iPhoneOS"; then
+              chosen="$app"
+              break
+            fi
           done
+          if [[ -z "$chosen" ]]; then
+            for app in /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode.app; do
+              if [[ -d "$app/Contents/Developer" ]]; then chosen="$app"; break; fi
+            done
+          fi
           if [[ -z "$chosen" ]]; then echo 'No compatible Xcode found. Inspect runner image.'; exit 20; fi
           sudo xcode-select -s "$chosen/Contents/Developer"
           xcodebuild -version
           xcodebuild -showsdks
-          xcrun --sdk iphonesimulator --show-sdk-version
+          xcrun --sdk iphoneos --show-sdk-version 2>/dev/null || xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || true
 
       - name: Check ORIGINAL app candidate manifest and resources
         id: manifest
@@ -88,16 +97,16 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -list 2>&1 | tee "$RUNNER_TEMP/ios-scheme-discovery.log"
-          # Confirm scheme is real from the previous output. If not, fail clearly
-          # and implement verified Xcode wrapper of the SAME production source.
+          # Try generic/platform=iOS (device) target matching installed iOS SDK,
+          # or fallback to generic/platform=iOS Simulator if available.
           if ! xcodebuild -scheme PersonalAssistant \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'generic/platform=iOS' \
             -resultBundlePath "$RUNNER_TEMP/PersonalAssistant.xcresult" \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/ios-app-build.log"; then
-            echo "Simulator build failed; attempting generic iOS device build..."
+            echo "Device build failed; attempting iOS Simulator build..."
             xcodebuild -scheme PersonalAssistant \
-              -destination 'generic/platform=iOS' \
-              -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-Device.xcresult" \
+              -destination 'generic/platform=iOS Simulator' \
+              -resultBundlePath "$RUNNER_TEMP/PersonalAssistant-Sim.xcresult" \
               CODE_SIGNING_ALLOWED=NO build 2>&1 | tee -a "$RUNNER_TEMP/ios-app-build.log"
           fi
 
@@ -119,6 +128,7 @@ jobs:
             ${{ runner.temp }}/ios-app-build.log
             ${{ runner.temp }}/Diagnostic.xcresult
             ${{ runner.temp }}/PersonalAssistant.xcresult
+            ${{ runner.temp }}/PersonalAssistant-Sim.xcresult
             ${{ runner.temp }}/PersonalAssistant-Device.xcresult
 
   portable-swift-tests:
