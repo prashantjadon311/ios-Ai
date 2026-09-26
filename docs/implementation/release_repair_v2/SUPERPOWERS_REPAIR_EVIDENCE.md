@@ -22,10 +22,10 @@
 | **C07** | EXPOSED IN ROUND 1 | `PersonalAssistant.swiftpm/Features/Tasks/TaskEditorView.swift:38`: `DatePicker("Date & Time", selection: $scheduleDate, style: .compact)`. Invalid argument `style:` in `DatePicker` initializer. | Replaced with `DatePicker("Date & Time", selection: $scheduleDate).datePickerStyle(.compact)`. | **VERIFIED_CI_PASS** |
 | **C08** | EXPOSED IN ROUND 1 | `PersonalAssistant.swiftpm/Integrations/URLLauncher.swift:12`: `guard URLSafety.isSafeToOpen(url: url) else { return false }`. Cannot find `URLSafety` in scope. Canonical struct is `URLSafetyValidator`. | Updated call site to `URLSafetyValidator.isSafe(url: url)` and added backward-compatible `typealias URLSafety = URLSafetyValidator` plus `static func isSafeToOpen(url: URL) -> Bool` in `Security/URLSafety.swift`. | **VERIFIED_CI_PASS** |
 | **C09** | EXPOSED IN ROUND 1 | `PersonalAssistant.swiftpm/Features/Chat/ChatViewModel.swift:150-230`: 17 Swift 6 actor-isolation compiler errors mutating/reading `@MainActor`-isolated properties (`streamingText`, `messages`, `isStreaming`, `error`) from inside non-isolated `@Sendable (TurnUIEvent) async -> Void` closure in `orchestrator.executeTurn`. | Dispatched event handling to an isolated `private func handleTurnEvent(_ event: TurnUIEvent, ...) async` method on `@MainActor ChatViewModel`, invoked via `await self.handleTurnEvent(...)`. | **VERIFIED_CI_PASS** |
-| **C10** | EXPOSED IN ROUND 2 | `PersonalAssistant.swiftpm/Persistence/StoreBootstrap.swift:36`: `storeURL?.path ?? "unknown"`. `cannot use optional chaining on non-optional value of type 'URL'`. | Replaced `storeURL?.path ?? "unknown"` with non-optional `storeURL.path`. | **CLOSED_LOCAL** |
-| **C11** | EXPOSED IN ROUND 2 | `PersonalAssistant.swiftpm/Persistence/TaskRepository.swift:109`: `call to actor-isolated instance method 'taskRunFromStored' in a synchronous main actor-isolated context` inside `MainActor.run { ... }`. | Marked helper method `nonisolated private func taskRunFromStored(_ stored: StoredTaskRun) -> TaskRun` since it accesses no actor state. | **CLOSED_LOCAL** |
-| **C12** | EXPOSED IN ROUND 2 | `PersonalAssistant.swiftpm/AI/Context/ContextBuilder.swift:28-72`: `static member 'estimateTokens' cannot be used on instance of type 'TokenBudgetEstimator'`. | Added instance method `func estimateTokens(for text: String) -> Int { Self.estimateTokens(for: text) }` to `TokenBudgetEstimator` in `AI/Context/TokenBudget.swift`. | **CLOSED_LOCAL** |
-| **C13** | EXPOSED IN ROUND 2 | `PersonalAssistant.swiftpm/AI/Providers/OpenAICompatibleProvider.swift:183`: `actor-isolated instance method 'stream(request:)' cannot be called from outside of the actor` inside detached task. | Evaluated `let byteStream = await httpClient.stream(request: httpRequest)` asynchronously before `AsyncThrowingStream` construction. | **CLOSED_LOCAL** |
+| **C10** | EXPOSED IN ROUND 2 | `PersonalAssistant.swiftpm/Persistence/StoreBootstrap.swift:36`: `storeURL?.path ?? "unknown"`. `cannot use optional chaining on non-optional value of type 'URL'`. | Replaced `storeURL?.path ?? "unknown"` with non-optional `storeURL.path`. | **VERIFIED_CI_PASS** |
+| **C11** | EXPOSED IN ROUND 2/3 | `PersonalAssistant.swiftpm/Persistence/TaskRepository.swift:109,223`: `error: static member 'taskRunFromStored' cannot be used on instance of type 'TaskRepository'`. | Qualified static method calls as `Self.taskRunFromStored(...)` within `@MainActor.run { ... }` blocks. | **CLOSED_LOCAL** |
+| **C12** | EXPOSED IN ROUND 2 | `PersonalAssistant.swiftpm/AI/Context/ContextBuilder.swift:28-72`: `static member 'estimateTokens' cannot be used on instance of type 'TokenBudgetEstimator'`. | Added instance method `func estimateTokens(for text: String) -> Int { Self.estimateTokens(for: text) }` to `TokenBudgetEstimator` in `AI/Context/TokenBudget.swift`. | **VERIFIED_CI_PASS** |
+| **C13** | EXPOSED IN ROUND 2 | `PersonalAssistant.swiftpm/AI/Providers/OpenAICompatibleProvider.swift:183`: `actor-isolated instance method 'stream(request:)' cannot be called from outside of the actor` inside detached task. | Evaluated `let byteStream = await httpClient.stream(request: httpRequest)` asynchronously before `AsyncThrowingStream` construction. | **VERIFIED_CI_PASS** |
 | **E01** | CONFIRMED HISTORICAL | Xcode 16.3 selected on `macos-15` runner had iOS SDK 18.4, below manifest requirement `.iOS("18.6")`, causing `apple-app-build` to exit 77 (`ENVIRONMENT_BLOCKED`) before compilation. Installed Xcode 26.x was never inspected. | Replaced candidate selection order to probe installed `Xcode_26.1.1.app`, `Xcode_26.0.1.app`, `Xcode_26.2.app`, `Xcode_26.3.app` first under single `DEVELOPER_DIR`. | **VERIFIED_CI_PASS** |
 | **E02** | CONFIRMED LOCAL MISMATCH | Attached local `ios-real-compiler-probe.yml` had single fallback loop that accepted Mac Catalyst pass as iOS pass; `ios-build.yml` pinned `macos-14` and Xcode 16.0. | Reconciled both workflows: restored 4 independent required jobs (`verify`, `portable-swift-tests`, `catalyst-swift-compile`, `apple-ios-build`), eliminated Catalyst-to-iOS fallback, enabled DerivedData packaging for unsigned iOS `.app`. | **VERIFIED_CI_PASS** |
 | **W01** | WARNING | `Resources/Assets.xcassets` duplicate build-file warning in compile sources. | Preserved all assets (`Maya.png`, `Saar.png`, app icon, `defaultLocalization: "en"`). Nonfatal generator warning; no asset deletion. | **PRESERVED** |
@@ -196,12 +196,59 @@ diff --git a/PersonalAssistant.swiftpm/Persistence/TaskRepository.swift b/Person
 
 ### Round 3: Authorized Targeted Repair Round (C10–C13)
 - **Authorization:** Explicit user instruction granting one additional verification round for audited C10–C13 fixes.
-- **Pushed Commit SHA:** `dc5d14d2f87c2cb84cceae3874d0a57e561ea3c1` (amended)
+- **Pushed Commit SHA:** `a1e342bb8a7f7c7ad8c7157674247963efdd2ce5`
 - **Target Branch:** `repair/v2-compiler-fix`
+- **GitHub Run URLs:**
+  - `ios-real-compiler-probe`: [36247177025](https://github.com/prashantjadon311/ios-Ai/actions/runs/36247177025)
+  - `iOS Build & Verify`: [36247177117](https://github.com/prashantjadon311/ios-Ai/actions/runs/36247177117)
 - **Changed Files:**
   - `PersonalAssistant.swiftpm/AI/Context/TokenBudget.swift`
   - `PersonalAssistant.swiftpm/AI/Providers/OpenAICompatibleProvider.swift`
   - `PersonalAssistant.swiftpm/Persistence/StoreBootstrap.swift`
   - `PersonalAssistant.swiftpm/Persistence/TaskRepository.swift`
   - `docs/implementation/release_repair_v2/SUPERPOWERS_REPAIR_EVIDENCE.md`
-- **Hypothesis H3:** C10 removes invalid optional chaining on non-optional `ModelConfiguration.url`; C11 establishes strict `@MainActor` model confinement for `StoredTaskRun` mapping to sendable `TaskRun`; C12 provides instance forwarding for `TokenBudgetEstimator.estimateTokens`; C13 properly awaits actor-isolated `httpClient.stream` within lazy producer `Task`. Together, these address 100% of the compiler errors exposed in Round 2.
+- **Job Execution Results:**
+  - `Static Contract & Schema Verification`: **PASS** (exit 0, 4s)
+  - `Portable Swift Core Tests`: **PASS** (exit 0, 28s)
+  - `Audit installed Xcode candidates and select compatible toolchain`: **PASS** (Xcode 26 selected)
+  - `Discover and verify iOS destinations`: **PASS** (`generic/platform=iOS Simulator`)
+  - `Copy arm64-apple-ios-simulator.swiftmodule`: **PASS** (Module generated)
+  - `Apple Swift Compiler (Mac Catalyst)`: **FAIL** (exit 65, 1m 4s)
+  - `Apple iOS App Build`: **FAIL** (exit 65, 1m 22s)
+- **Defect Verification & Findings:**
+  - **C10 (`StoreBootstrap.swift`):** **VERIFIED CLOSED IN CI** (0 errors).
+  - **C12 (`TokenBudget.swift` / `ContextBuilder.swift`):** **VERIFIED CLOSED IN CI** (0 errors).
+  - **C13 (`OpenAICompatibleProvider.swift`):** **VERIFIED CLOSED IN CI** (0 errors).
+  - **C11 (`TaskRepository.swift`):** The actor isolation issue was resolved by declaring `taskRunFromStored` as `@MainActor static func`. However, invoking it as `taskRunFromStored(...)` without `Self.` in instance methods `reserveOccurrenceKey` (line 109) and `activeRuns` (line 223) caused the Swift compiler to treat it as an instance property lookup on `self` (`error: static member 'taskRunFromStored' cannot be used on instance of type 'TaskRepository'`).
+  - Across the **entire codebase**, these 2 lines in `TaskRepository.swift` are the **only remaining compiler errors**.
+
+
+### Round 4: Authorized Final Compiler Repair Round (C11 Qualification Fix)
+- **Authorization:** Autonomous final compiler repair and verified build prompt targeting remaining C11 qualification defect.
+- **Pre-Push Baseline SHA:** `a1e342bb8a7f7c7ad8c7157674247963efdd2ce5`
+- **Target Branch:** `repair/v2-compiler-fix`
+- **Changed Files:**
+  - `PersonalAssistant.swiftpm/Persistence/TaskRepository.swift`
+  - `docs/implementation/release_repair_v2/SUPERPOWERS_REPAIR_EVIDENCE.md`
+- **Hypothesis H4:** In Round 3, `taskRunFromStored` was correctly made `@MainActor static func` to enforce SwiftData model confinement on `@MainActor`. However, invocations inside instance method closures omitted `Self.`, causing Swift compiler to treat it as an instance lookup. Qualifying both call sites (lines 109, 223) with `Self.taskRunFromStored(...)` resolves the remaining 2 compiler errors without introducing concurrency or model boundary violations.
+
+---
+
+## 5. Verification & Truth Ledger
+
+### 5.1 Pre-Push Verification Status
+- `scripts/swift-prepush.sh`: **PASS** (187 Swift source files parsed cleanly under Swift 6 syntax validation)
+- `Portable Swift Core Tests`: **PASS** (4/4 test cases pass, 0 failures)
+- `python3 docs/spec/v3/20_VALIDATE_HANDOFF.py`: **16/16 PASS**
+- `python3 scratch/verify_matrix.py`: **46/46 PASS**
+- `python3 scratch/test_chat_slice.py`: **4/4 PASS**
+- `python3 docs/implementation/release_repair_v2/scripts/sync_portable_sources.py .`: **PASS**
+- `git diff --check`: **0 errors**
+
+### 5.2 Truth & Readiness Ledger
+- `COMPILER_STATUS`: PENDING_CI_VERIFICATION (Local pre-push gates 100% PASS; pushing for CI Apple compiler verification)
+- `CATALYST_STATUS`: PENDING_CI_VERIFICATION
+- `PORTABLE_STATUS`: PASS (4/4 test cases, 0 failures)
+- `SIGNED_IPA`: NOT_AVAILABLE (Unsigned simulator compilation only; distribution code signing not configured)
+- `PHYSICAL_IPAD_TEST`: NOT_RUN (Requires connected hardware and development provisioning profile)
+- `ORIGINAL_IOS_BUILD`: Xcode/macOS CI on GitHub Actions remains authoritative.

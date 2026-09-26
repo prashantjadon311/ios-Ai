@@ -106,7 +106,7 @@ actor TaskRepository {
             }
             if let existing {
                 // Return existing run
-                return taskRunFromStored(existing)
+                return Self.taskRunFromStored(existing)
             }
             // Create new
             let run = TaskRun(
@@ -220,7 +220,7 @@ actor TaskRepository {
                 sortBy: [SortDescriptor(\.scheduledAt, order: .reverse)]
             )
             let stored = try context.fetch(descriptor)
-            return stored.map { taskRunFromStored($0) }
+            return stored.map { Self.taskRunFromStored($0) }
         }
     }
 }
