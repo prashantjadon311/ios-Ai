@@ -40,6 +40,18 @@ enum HTTPClientError: Error, Sendable {
     case invalidResponse
 }
 
+final class RejectCredentialRedirects: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
 // MARK: - HTTP Client actor
 
 actor HTTPClient {
@@ -49,6 +61,7 @@ actor HTTPClient {
     private let session: URLSession
     private let allowedHosts: Set<String>  // HTTPS-only allowlist
     private let maxResponseBytes: Int
+    private let redirectDelegate = RejectCredentialRedirects()
 
     init(
         session: URLSession = .shared,
@@ -86,7 +99,7 @@ actor HTTPClient {
 
         // Never set untrusted Host header
         // Redirects: delegate rejects non-HTTPS or unapproved host changes
-        let (data, response) = try await session.data(for: urlRequest)
+        let (data, response) = try await session.data(for: urlRequest, delegate: redirectDelegate)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw HTTPClientError.invalidResponse
@@ -112,8 +125,9 @@ actor HTTPClient {
 
     /// Returns an AsyncThrowingStream of raw Data chunks.
     func stream(request: HTTPRequest) -> AsyncThrowingStream<Data, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
+        let redirectDelegate = self.redirectDelegate
+        return AsyncThrowingStream { continuation in
+            let streamTask = Task {
                 do {
                     try validateURL(request.url)
                     var urlRequest = URLRequest(url: request.url)
@@ -121,7 +135,7 @@ actor HTTPClient {
                     urlRequest.httpBody = request.body
                     for (k, v) in request.headers { urlRequest.setValue(v, forHTTPHeaderField: k) }
 
-                    let (asyncBytes, response) = try await session.bytes(for: urlRequest)
+                    let (asyncBytes, response) = try await session.bytes(for: urlRequest, delegate: redirectDelegate)
                     guard let httpResponse = response as? HTTPURLResponse,
                           (200..<300).contains(httpResponse.statusCode) else {
                         continuation.finish(throwing: HTTPClientError.invalidResponse)
@@ -130,6 +144,10 @@ actor HTTPClient {
 
                     var totalBytes = 0
                     for try await byte in asyncBytes {
+                        if Task.isCancelled {
+                            continuation.finish(throwing: HTTPClientError.requestCancelled)
+                            return
+                        }
                         totalBytes += 1
                         guard totalBytes <= maxResponseBytes else {
                             continuation.finish(throwing: HTTPClientError.responseTooLarge(
@@ -145,6 +163,9 @@ actor HTTPClient {
                 } catch {
                     continuation.finish(throwing: error)
                 }
+            }
+            continuation.onTermination = { @Sendable _ in
+                streamTask.cancel()
             }
         }
     }

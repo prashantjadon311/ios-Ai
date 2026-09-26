@@ -38,12 +38,26 @@ enum AppSheet: Identifiable, Hashable {
     }
 }
 
+/// Intent to launch chat with an initial prompt text and a unique launch nonce for deduplication.
+struct ChatLaunchIntent: Hashable, Sendable {
+    let conversationID: ConversationID
+    let initialText: String?
+    let launchNonce: UUID
+
+    init(conversationID: ConversationID, initialText: String?, launchNonce: UUID = UUID()) {
+        self.conversationID = conversationID
+        self.initialText = initialText
+        self.launchNonce = launchNonce
+    }
+}
+
 @MainActor
 @Observable
 final class AppRouter {
     var selectedDestination: AppDestination = .dashboard
     var presentedSheet: AppSheet?
     var navigationPath: NavigationPath = NavigationPath()
+    var pendingLaunchIntent: ChatLaunchIntent?
 
     // MARK: - Navigation actions
 
