@@ -11,18 +11,7 @@ enum TaskTransitionError: Error, Sendable {
 
 struct TaskStateMachine: Sendable {
     static func canTransition(from: TaskRunStatus, to: TaskRunStatus) -> Bool {
-        switch (from, to) {
-        case (.queued, .running): return true
-        case (.queued, .cancelled): return true
-        case (.running, .succeeded): return true
-        case (.running, .failed): return true
-        case (.running, .cancelled): return true
-        case (.running, .ambiguous): return true
-        case (.ambiguous, .succeeded): return true
-        case (.ambiguous, .failed): return true
-        case (.ambiguous, .cancelled): return true
-        default: return false
-        }
+        from.canTransition(to: to)
     }
 
     static func validateTransition(from: TaskRunStatus, to: TaskRunStatus) throws {
