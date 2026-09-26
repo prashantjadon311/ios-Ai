@@ -180,7 +180,8 @@ actor OpenAICompatibleProvider: AssistantModel {
                 var receivedDone = false
                 continuation.yield(.started(modelID: selectedModel))
                 do {
-                    for try await chunk in httpClient.stream(request: httpRequest) {
+                    let byteStream = await httpClient.stream(request: httpRequest)
+                    for try await chunk in byteStream {
                         if Task.isCancelled {
                             continuation.finish(throwing: CancellationError())
                             return
