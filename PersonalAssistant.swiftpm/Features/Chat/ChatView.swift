@@ -5,12 +5,18 @@ import SwiftUI
 
 struct ChatView: View {
     let conversationID: ConversationID?
+    let launchIntent: ChatLaunchIntent?
 
     @Environment(AppContainer.self) private var container
     @Environment(AppSession.self) private var session
     @Environment(AppRouter.self) private var router
     @State private var viewModel: ChatViewModel?
     @State private var scrollPosition: ScrollPosition = ScrollPosition(idType: MessageID.self)
+
+    init(conversationID: ConversationID? = nil, launchIntent: ChatLaunchIntent? = nil) {
+        self.conversationID = conversationID ?? launchIntent?.conversationID
+        self.launchIntent = launchIntent
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,6 +55,12 @@ struct ChatView: View {
             )
             viewModel = vm
             await vm.load()
+            if let intent = router.pendingLaunchIntent, intent.conversationID == conversationID {
+                router.pendingLaunchIntent = nil
+                await vm.submitLaunchOnce(intent)
+            } else if let intent = launchIntent {
+                await vm.submitLaunchOnce(intent)
+            }
         }
     }
 

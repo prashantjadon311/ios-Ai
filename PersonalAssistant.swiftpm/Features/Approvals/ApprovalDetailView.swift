@@ -15,10 +15,17 @@ struct ApprovalDetailView: View {
             Text("Approval Required")
                 .font(.title2.bold())
 
-            Text(request.summary)
+            Text(request.humanReadableSummary)
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .padding()
+
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                LabeledContent("Recipient", value: request.recipient)
+                LabeledContent("Risk Level", value: request.riskLevel.rawValue.capitalized)
+            }
+            .font(.caption)
+            .padding(.horizontal)
 
             HStack(spacing: AppTheme.Spacing.md) {
                 Button("Reject", role: .destructive, action: onReject)

@@ -25,20 +25,69 @@ struct TaskRecurrenceCalculator: Sendable {
         let originalHour = targetHour ?? cal.component(.hour, from: current)
         let originalMinute = targetMinute ?? cal.component(.minute, from: current)
 
-        // Base advancement based on frequency
-        var dateComponents = DateComponents()
+        let interval = max(1, recurrence.interval)
+        let tentativeTarget: Date?
+
         switch recurrence.frequency {
         case .daily:
-            dateComponents.day = recurrence.interval
+            tentativeTarget = cal.date(byAdding: .day, value: interval, to: current)
+
         case .weekly:
-            dateComponents.day = 7 * recurrence.interval
+            if let daysOfWeek = recurrence.daysOfWeek, !daysOfWeek.isEmpty {
+                var found: Date? = nil
+                for dayOffset in 1...7 {
+                    if let candidate = cal.date(byAdding: .day, value: dayOffset, to: current) {
+                        let candidateWeekday = cal.component(.weekday, from: candidate)
+                        if daysOfWeek.contains(candidateWeekday) {
+                            if cal.isDate(candidate, equalTo: current, toGranularity: .weekOfYear) {
+                                found = candidate
+                                break
+                            } else if interval == 1 {
+                                found = candidate
+                                break
+                            }
+                        }
+                    }
+                }
+                if found == nil {
+                    if let nextWeek = cal.date(byAdding: .weekOfYear, value: interval, to: current),
+                       let weekInterval = cal.dateInterval(of: .weekOfYear, for: nextWeek) {
+                        for dayOffset in 0..<7 {
+                            if let candidate = cal.date(byAdding: .day, value: dayOffset, to: weekInterval.start) {
+                                let candidateWeekday = cal.component(.weekday, from: candidate)
+                                if daysOfWeek.contains(candidateWeekday) {
+                                    found = candidate
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+                tentativeTarget = found
+            } else {
+                tentativeTarget = cal.date(byAdding: .day, value: 7 * interval, to: current)
+            }
+
         case .monthly:
-            dateComponents.month = recurrence.interval
+            if let dayOfMonth = recurrence.dayOfMonth {
+                if let nextMonth = cal.date(byAdding: .month, value: interval, to: current) {
+                    var targetComps = cal.dateComponents([.year, .month], from: nextMonth)
+                    let range = cal.range(of: .day, in: .month, for: nextMonth)
+                    let maxDay = range?.count ?? 30
+                    targetComps.day = min(dayOfMonth, maxDay)
+                    tentativeTarget = cal.date(from: targetComps)
+                } else {
+                    tentativeTarget = nil
+                }
+            } else {
+                tentativeTarget = cal.date(byAdding: .month, value: interval, to: current)
+            }
+
         case .yearly:
-            dateComponents.year = recurrence.interval
+            tentativeTarget = cal.date(byAdding: .year, value: interval, to: current)
         }
 
-        guard let tentativeTarget = cal.date(byAdding: dateComponents, to: current) else {
+        guard let tentativeTarget else {
             return nil
         }
 
@@ -48,24 +97,26 @@ struct TaskRecurrenceCalculator: Sendable {
         targetComponents.minute = originalMinute
         targetComponents.second = 0
 
+        let resultDate: Date?
         // Handle DST spring-forward (gap) and fall-back (overlap)
         if let exactDate = cal.date(from: targetComponents) {
             // Verify if Calendar preserved wall-clock hour or if it was nonexistent
             let computedHour = cal.component(.hour, from: exactDate)
             if computedHour != originalHour {
                 // Nonexistent time during spring-forward: select next valid date
-                return cal.nextDate(
+                resultDate = cal.nextDate(
                     after: tentativeTarget,
                     matching: DateComponents(minute: originalMinute),
                     matchingPolicy: .nextTime,
                     repeatedTimePolicy: .first,
                     direction: .forward
                 )
+            } else {
+                resultDate = exactDate
             }
-            return exactDate
         } else {
             // Nonexistent time: compute next valid time matching target minute
-            return cal.nextDate(
+            resultDate = cal.nextDate(
                 after: tentativeTarget,
                 matching: DateComponents(minute: originalMinute),
                 matchingPolicy: .nextTime,
@@ -73,5 +124,15 @@ struct TaskRecurrenceCalculator: Sendable {
                 direction: .forward
             )
         }
+
+        if let resultDate {
+            if case .until(let limit) = recurrence.endCondition, resultDate > limit {
+                return nil
+            }
+            if case .afterCount(let count) = recurrence.endCondition, count <= 0 {
+                return nil
+            }
+        }
+        return resultDate
     }
 }

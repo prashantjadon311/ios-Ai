@@ -5,6 +5,7 @@ import SwiftUI
 struct PrivacySettingsView: View {
     @Environment(AppSession.self) private var session
     @State private var privacyMode: PrivacyMode = .cloudAllowed
+    @State private var errorMessage: String?
 
     var body: some View {
         Form {
@@ -13,8 +14,14 @@ struct PrivacySettingsView: View {
                     get: { privacyMode },
                     set: { newMode in
                         privacyMode = newMode
+                        errorMessage = nil
                         Task {
-                            try? await session.updatePrivacyMode(newMode)
+                            do {
+                                try await session.updatePrivacyMode(newMode)
+                            } catch {
+                                errorMessage = error.localizedDescription
+                                privacyMode = session.preferences?.privacyMode ?? .cloudAllowed
+                            }
                         }
                     }
                 )) {
@@ -22,6 +29,12 @@ struct PrivacySettingsView: View {
                     Text("Private Only").tag(PrivacyMode.privateOnly)
                 }
                 .pickerStyle(.inline)
+
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
 
                 if privacyMode == .privateOnly {
                     Label("Private Only blocks all external data transfer, not just AI chat.", systemImage: "info.circle")

@@ -5,6 +5,20 @@
 import Foundation
 import SwiftUI
 
+enum AvatarIdentity: String, CaseIterable, Codable, Sendable, Hashable {
+    case maya = "Maya"
+    case saar = "Saar"
+}
+
+extension AvatarRole {
+    var identity: AvatarIdentity {
+        switch self {
+        case .maya: .maya
+        case .saar: .saar
+        }
+    }
+}
+
 /// Resolves avatar images, colors, and fallback representations.
 /// Does not couple avatar gender with voice gender.
 enum AvatarAssetCatalog {
@@ -15,6 +29,10 @@ enum AvatarAssetCatalog {
         case .maya: return "Maya"
         case .saar: return "Saar"
         }
+    }
+
+    static func assetName(for identity: AvatarIdentity) -> String {
+        identity.rawValue
     }
 
     /// System image fallback if bundled image asset is absent.
@@ -38,6 +56,27 @@ enum AvatarAssetCatalog {
                 SwiftUI.Color(hue: 0.08, saturation: 0.8, brightness: 0.9),
                 SwiftUI.Color(hue: 0.15, saturation: 0.7, brightness: 0.85)
             ]
+        }
+    }
+
+    static func primaryColor(for identity: AvatarIdentity) -> SwiftUI.Color {
+        switch identity {
+        case .maya: return .init(hue: 0.55, saturation: 0.7, brightness: 0.85)
+        case .saar: return .init(hue: 0.08, saturation: 0.7, brightness: 0.85)
+        }
+    }
+
+    static func secondaryColor(for identity: AvatarIdentity) -> SwiftUI.Color {
+        switch identity {
+        case .maya: return .init(hue: 0.65, saturation: 0.6, brightness: 0.8)
+        case .saar: return .init(hue: 0.15, saturation: 0.7, brightness: 0.85)
+        }
+    }
+
+    static func glowColors(for identity: AvatarIdentity) -> [SwiftUI.Color] {
+        switch identity {
+        case .maya: return glowColors(for: AvatarRole.maya)
+        case .saar: return glowColors(for: AvatarRole.saar)
         }
     }
 }

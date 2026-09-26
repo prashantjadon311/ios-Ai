@@ -54,26 +54,26 @@ struct PrivacyRoutingView: View {
     }
 
     private func load() async {
-        guard let owner = session.currentProfile else { return }
-        do {
-            let prefs = try await container.configurationRepository.preferences(ownerID: owner.id)
-            currentPrefs = prefs
+        if let prefs = session.preferences {
             privacyMode = prefs.privacyMode
-        } catch {
-            errorMessage = error.localizedDescription
+        } else if let owner = session.currentProfile {
+            do {
+                let prefs = try await container.configurationRepository.preferences(ownerID: owner.id)
+                privacyMode = prefs.privacyMode
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
     private func save(mode: PrivacyMode) async {
-        guard let owner = session.currentProfile else { return }
-        var prefs = currentPrefs ?? AppPreference(ownerID: owner.id)
-        prefs.privacyMode = mode
-        prefs.updatedAt = Date()
+        errorMessage = nil
         do {
-            try await container.configurationRepository.savePreferences(prefs)
-            currentPrefs = prefs
+            try await session.updatePrivacyMode(mode)
         } catch {
             errorMessage = error.localizedDescription
+            // Revert on failure
+            privacyMode = session.preferences?.privacyMode ?? .cloudAllowed
         }
     }
 }

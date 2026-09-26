@@ -174,15 +174,21 @@ actor OpenAICompatibleProvider: AssistantModel {
         )
 
         return AsyncThrowingStream { continuation in
-            Task {
+            let producer = Task {
                 var decoder = SSEDecoder()
                 var sequence = 0
+                var receivedDone = false
                 continuation.yield(.started(modelID: selectedModel))
                 do {
                     for try await chunk in httpClient.stream(request: httpRequest) {
+                        if Task.isCancelled {
+                            continuation.finish(throwing: CancellationError())
+                            return
+                        }
                         let frames = try decoder.feed(chunk)
                         for frame in frames {
                             guard frame.data != "[DONE]" else {
+                                receivedDone = true
                                 continuation.yield(.completed(finishReason: "stop"))
                                 continuation.finish()
                                 return
@@ -203,19 +209,24 @@ actor OpenAICompatibleProvider: AssistantModel {
                             }
                         }
                     }
-                    let finalFrames = try? decoder.finish()
-                    for frame in finalFrames ?? [] {
+                    let finalFrames = try decoder.finish()
+                    for frame in finalFrames {
                         if frame.data == "[DONE]" {
+                            receivedDone = true
                             continuation.yield(.completed(finishReason: "stop"))
                             continuation.finish()
                             return
                         }
                     }
-                    continuation.yield(.completed(finishReason: "stop"))
-                    continuation.finish()
+                    if !receivedDone {
+                        throw ProviderFailure(providerID: providerID, message: "Stream disconnected unexpectedly before terminal event")
+                    }
                 } catch {
                     continuation.finish(throwing: error)
                 }
+            }
+            continuation.onTermination = { @Sendable _ in
+                producer.cancel()
             }
         }
     }

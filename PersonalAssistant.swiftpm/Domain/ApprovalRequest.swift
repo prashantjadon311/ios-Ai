@@ -43,6 +43,8 @@ struct ApprovalRequest: Identifiable, Codable, Sendable, Hashable {
     let recipient: String
     /// Data classes that will be accessed or sent.
     let dataClasses: [PrivacyClass]
+    let canonicalArguments: Data
+    let sessionGeneration: UUID
     let expiresAt: Date
     var status: ApprovalStatus
     let createdAt: Date
@@ -60,6 +62,8 @@ struct ApprovalRequest: Identifiable, Codable, Sendable, Hashable {
         humanReadableSummary: String,
         recipient: String,
         dataClasses: [PrivacyClass],
+        canonicalArguments: Data,
+        sessionGeneration: UUID,
         expiresAt: Date,
         status: ApprovalStatus = .pending,
         createdAt: Date = Date(),
@@ -76,6 +80,8 @@ struct ApprovalRequest: Identifiable, Codable, Sendable, Hashable {
         self.humanReadableSummary = humanReadableSummary
         self.recipient = recipient
         self.dataClasses = dataClasses
+        self.canonicalArguments = canonicalArguments
+        self.sessionGeneration = sessionGeneration
         self.expiresAt = expiresAt
         self.status = status
         self.createdAt = createdAt

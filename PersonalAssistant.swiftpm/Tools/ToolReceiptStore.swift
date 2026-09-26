@@ -43,29 +43,33 @@ actor ToolReceiptStore {
             updatedAt: Date()
         )
 
-        inMemoryCache[id] = receipt
-
         if let modelContainer {
-            try await MainActor.run {
-                let ctx = modelContainer.mainContext
-                let stored = StoredToolReceipt(
-                    id: id,
-                    invocationID: invocationID,
-                    operationKey: operationKey,
-                    statusRaw: ToolReceiptStatus.prepared.rawValue,
-                    toolID: toolID,
-                    ownerID: ownerID.rawValue,
-                    traceIDRaw: traceID.rawValue,
-                    externalReference: nil,
-                    redactedResult: nil,
-                    createdAt: receipt.createdAt,
-                    updatedAt: receipt.updatedAt
-                )
-                ctx.insert(stored)
-                try ctx.save()
+            do {
+                try await MainActor.run {
+                    let ctx = modelContainer.mainContext
+                    let stored = StoredToolReceipt(
+                        id: id,
+                        invocationID: invocationID,
+                        operationKey: operationKey,
+                        statusRaw: ToolReceiptStatus.prepared.rawValue,
+                        toolID: toolID,
+                        ownerID: ownerID.rawValue,
+                        traceIDRaw: traceID.rawValue,
+                        externalReference: nil,
+                        redactedResult: nil,
+                        createdAt: receipt.createdAt,
+                        updatedAt: receipt.updatedAt
+                    )
+                    ctx.insert(stored)
+                    try ctx.save()
+                }
+            } catch {
+                inMemoryCache.removeValue(forKey: id)
+                throw error
             }
         }
 
+        inMemoryCache[id] = receipt
         return receipt
     }
 

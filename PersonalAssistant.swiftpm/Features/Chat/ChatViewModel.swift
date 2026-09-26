@@ -58,6 +58,18 @@ final class ChatViewModel {
         }
     }
 
+    private var consumedNonces: Set<UUID> = []
+
+    func submitLaunchOnce(_ intent: ChatLaunchIntent) async {
+        guard let text = intent.initialText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return }
+        guard !consumedNonces.contains(intent.launchNonce) else { return }
+        consumedNonces.insert(intent.launchNonce)
+
+        composerText = text
+        await send()
+    }
+
     // MARK: - Send message
 
     func send() async {

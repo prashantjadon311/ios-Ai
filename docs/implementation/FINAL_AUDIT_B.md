@@ -1,10 +1,10 @@
-# Final Audit B: Adversarial Security, Fail-Closed Privacy & Release Integrity
+# Final Audit B: Adversarial Security, Fail-Closed Privacy & Release Integrity (V2 Campaign)
 
 **Audit Date:** 2026-09-26  
 **Auditor:** Principal Security Architect & AI Safety Engineer  
-**Baseline Git Commit:** `b34423ec90f705f129d567300a3cbc534f7559e7` (`fourth`)  
+**Baseline Git Commit:** `2918293e7355290ba722bb734652c9ad70c75a9f` (`Five`)  
 **Package Target:** `PersonalAssistant.swiftpm`  
-**Classification:** `ADVERSARIAL_INVARIANTS: PASS` | `SECURITY_POSTURE: FAIL-CLOSED`  
+**Classification:** `ADVERSARIAL_INVARIANTS: PASS` | `SECURITY_POSTURE: FAIL-CLOSED` | `AWAITING_APPLE_COMPILER`  
 
 ---
 
@@ -43,8 +43,10 @@
 - **Threat Vector:** User enables Private-Only mode, but auxiliary features (model catalog fetch, preflight check, link preview) emit network requests in the background.
 - **Verification Invariant:** When `privacyMode == .privateOnly`, ALL external network egress must be blocked with a typed error. No external HTTP requests may be dispatched.
 - **Source Proof:**
-  - `ModelRouter.route(...)`: checks `guard privacyMode != .privateOnly else { throw AppError.privacyDenied(route: "cloud", requiredClass: .publicData) }`.
-  - `PrivacySettingsView`: binds directly to `session.updatePrivacyMode(...)`, persisting to `ConfigurationRepository` and updating `StoredAppPreference.consentsData`.
+  - `ModelRouter.route(...)`: checks `guard privacyMode != .privateOnly else { return .noneEligible(reason: ...) }`.
+  - `AppSession.updatePrivacyMode(_:)`: commits preference update to `ConfigurationRepository` *before* publishing to memory.
+  - `PrivacyRoutingView`: routes all mutations through `session.updatePrivacyMode(_:)` and reverts UI toggle if persistence fails.
+  - `PrivacySettingsView`: reverts UI selection on persistence error and displays explicit error feedback.
 - **Status:** **PASS**
 
 ### 2.2 Secure Enclave / Keychain Credential Isolation (S013 / T020)
@@ -56,32 +58,32 @@
   - `ProviderDetailView.swift`: truthful disclosure explains that API keys are sent directly to the selected provider's API endpoint over HTTPS as an Authorization header.
 - **Status:** **PASS**
 
----
-
-## 3. Crash & Ambiguity Resilience (Two-Phase Receipts)
-
-### 3.1 Unreceipted External Side Effect Prohibition (S003 / T011 / B05 / B06)
-- **Threat Vector:** App crashes or loses network connectivity mid-way through executing an external tool call (e.g. creating a calendar event, opening a URL). On relaunch, the app blindly retries, causing duplicate side effects.
-- **Verification Invariant:** Before any external executor is called, a `PREPARED` receipt must be atomically committed to persistent disk storage. Ambiguous operations must NEVER be automatically retried.
+### 2.3 Network Redirection & Authorization Leakage (T013)
+- **Threat Vector:** Server responds with 301/302 redirecting to another host, potentially leaking the `Authorization: Bearer <key>` header to an untrusted third party.
+- **Verification Invariant:** Credentialed requests must never follow redirects or forward authorization headers.
 - **Source Proof:**
-  - `ToolReceiptStore.recordPrepared`: throwing `async throws` method that requires successful `ctx.save()` before returning.
-  - `ToolInvocationCoordinator`: checks `receiptForOperationKey(opKey)`. If existing status is `.prepared` or `.ambiguous`, throws `AppError.sideEffectAmbiguous(operationKey: opKey)`.
-  - Startup reconciliation (`ToolReceiptStore.reconcileStartup()`): converts orphaned `PREPARED` receipts to `AMBIGUOUS` with the explanation `"Execution interrupted by process termination"`.
-- **Status:** **PASS**
-
-### 3.2 Non-Destructive Storage Migration (S011 / T021 / C12)
-- **Threat Vector:** Future schema migration failure causes the app to wipe the SwiftData store, destroying all user conversations, tasks, and memory.
-- **Verification Invariant:** Incompatible migrations or store errors must NEVER trigger an automatic empty reset. The app must transition to read-only store recovery mode and present user diagnostic options.
-- **Source Proof:**
-  - `AppSession.markStoreRecoveryRequired(reason:)`: flags `storeRecoveryRequired = true` without executing destructive file deletions.
-  - UI presents `AppSheet.storeRecovery(reason:)` displaying diagnostic export options.
+  - `HTTPClient.swift`: uses `RejectCredentialRedirects: NSObject, URLSessionTaskDelegate` returning `completionHandler(nil)` on `willPerformHTTPRedirection`.
 - **Status:** **PASS**
 
 ---
 
-## 4. Release Decision & Classification
+## 3. Two-Phase Tool Durability & Receipts
 
-- **Static Security Audits:** **PASS (100%)**
-- **Negative Verification Invariants:** All 8 cross-path negative invariants verified.
-- **Adversarial Resiliency:** All cryptographic approval, MIME sniffing, and two-phase receipt idempotency checks verified.
-- **Candidate Delivery Status:** `COMPILED_CANDIDATE_AWAITING_USER_IPAD` (ready for deployment and physical validation on iPad).
+### 3.1 Idempotent Execution Ledger (S003 / T011)
+- **Threat Vector:** App crashes or terminates mid-execution of an external side effect (e.g. calendar event creation), risking duplicate execution on restart.
+- **Verification Invariant:** A durable `PREPARED` receipt must be saved to disk before any side effect starts. Interrupted executions must be marked `AMBIGUOUS` and never automatically retried.
+- **Source Proof:**
+  - `ToolReceiptStore.recordPrepared`: throwing `async throws` function saving `StoredToolReceipt` to SwiftData; in-memory cache updated only after disk save succeeds.
+  - `ToolInvocationCoordinator.executeCall`: checks for existing receipts via `receiptForOperationKey`. An existing `prepared` or `ambiguous` receipt throws `AppError.sideEffectAmbiguous` without auto-retry.
+  - `reconcileStartup`: transitions orphaned `prepared` receipts to `ambiguous` on app launch.
+- **Status:** **PASS**
+
+---
+
+## 4. Release Evidence & Next Steps
+
+- **Static Contract Matrix:** 46/46 PASS (`python3 scratch/verify_matrix.py`)
+- **Chat Vertical Slice:** 4/4 PASS (`python3 scratch/test_chat_slice.py`)
+- **V3 Handoff Schema:** 16/16 PASS (`python3 docs/spec/v3/20_VALIDATE_HANDOFF.py`)
+- **Apple Compiler Probe:** Workflow file installed (`.github/workflows/ios-real-compiler-probe.yml`).
+- **Release Posture:** Ready for real compilation diagnostics on macOS Actions runner and physical iPad verification.

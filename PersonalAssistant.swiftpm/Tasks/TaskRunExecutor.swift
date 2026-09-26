@@ -5,16 +5,16 @@
 import Foundation
 
 actor TaskRunExecutor {
-    func executeStep(
-        step: TaskStep,
-        onProgress: @Sendable (Double) async -> Void
-    ) async throws -> TaskStep {
+    func executeLocalStep(
+        _ step: TaskStepRecord,
+        operation: @Sendable (TaskStepRecord) async throws -> Void
+    ) async throws -> TaskStepRecord {
         try Task.checkCancellation()
-        await onProgress(0.5)
-        var updated = step
-        updated.isCompleted = true
-        updated.completedAt = Date()
-        await onProgress(1.0)
-        return updated
+        try await operation(step)
+        try Task.checkCancellation()
+        var done = step
+        done.status = .completed
+        done.completedAt = Date()
+        return done
     }
 }

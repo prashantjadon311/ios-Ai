@@ -6,7 +6,7 @@ import Foundation
 import SwiftUI
 import Observation
 
-/// Primary navigation destinations (five screens).
+/// Primary navigation destinations (five screens + chat/approvals as routed surfaces).
 enum AppDestination: Hashable, Equatable {
     case dashboard
     case tasks
@@ -77,8 +77,12 @@ final class AppRouter {
 
     // MARK: - Deep link handling (rejects unknown/unsafe links per V3 A17)
 
+    /// Handles universal links and deep links.
+    /// Only processes known safe URL schemes; unknown links are rejected.
     func handle(url: URL) {
+        // Only process our custom scheme or known safe patterns
         guard url.scheme == "personalassistant" else {
+            // Unknown scheme — do not process (A17: reject untrusted deep-link injection)
             return
         }
         switch url.host {
@@ -90,14 +94,16 @@ final class AppRouter {
         case "approvals":
             openApprovals()
         default:
+            // Unknown deep link — silently ignore (A17)
             break
         }
     }
 
     // MARK: - Restore safe route
 
+    /// On scene restore, only restores safe destinations (not sheets with sensitive data).
     func restoreSafeRoute(_ destination: AppDestination) {
         selectedDestination = destination
-        presentedSheet = nil
+        presentedSheet = nil  // never auto-restore sheets
     }
 }
