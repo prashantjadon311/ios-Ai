@@ -24,6 +24,7 @@ FILES = [
     'Tools/ToolInvocationCoordinator.swift',
     'Security/SessionGuard.swift',
     'Security/ApprovalCoordinator.swift',
+    'Security/KeychainVault.swift',
 ]
 
 def main():

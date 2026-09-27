@@ -81,15 +81,16 @@ actor ConversationRepository {
             sequenceNumber: count
         )
         try await MainActor.run {
-            context.insert(try MessageMapper.toStored(msg))
             // Update conversation last-message
             let convDesc = FetchDescriptor<StoredConversation>(
                 predicate: #Predicate { $0.id == convUUID && $0.ownerID == ownerUUID }
             )
-            if let conv = try context.fetch(convDesc).first {
-                conv.messageCount += 1
-                conv.lastMessageAt = msg.createdAt
+            guard let conv = try context.fetch(convDesc).first else {
+                throw AppError.validationFailed(field: "conversationID", reason: "Conversation not found or not owned by caller")
             }
+            context.insert(try MessageMapper.toStored(msg))
+            conv.messageCount += 1
+            conv.lastMessageAt = msg.createdAt
             try context.save()
         }
         return msg

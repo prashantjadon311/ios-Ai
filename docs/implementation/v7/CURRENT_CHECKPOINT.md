@@ -1,4 +1,4 @@
-# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G3: PHASE P01-C COMPLETE)
+# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G4: PHASE P01-D IN PROGRESS / PRE-PUSH)
 
 - **Active Checkpoint File:** `docs/implementation/v7/CURRENT_CHECKPOINT.md` (mutable, active execution authority)
 - **Kit Reference Checkpoint:** `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/evidence/CURRENT_CHECKPOINT.md` (immutable, pinned to kit manifest)
@@ -38,26 +38,26 @@
   - PR checks: 12/12 successful.
 
 ### Gate G3 (P01-C) TDD Red-Green-Refactor Evidence:
+- Invariants enforced across `SessionGuard`, `ApprovalCoordinator`, `ToolInvocationCoordinator`, `AppSession`, `ChatViewModel`, and repositories.
+- Local TDD: 32/32 portable core tests PASS (`SessionGuardTests.swift` with 11 tests).
+- Remote GitHub Actions CI Results for `e1d685f`:
+  - `ios-real-compiler-probe` (Run ID `36342532881` / PR Run ID `36342535171`): SUCCESS (Apple iOS App Build: 1m27s / 3m4s, Catalyst: 1m13s / 1m27s, Portable Core: 41s / 35s, Static: 5s / 6s)
+  - `iOS Build & Verify` (Run ID `36342532885` / PR Run ID `36342535302`): SUCCESS (Xcode iOS Build Verification: 1m35s / 1m9s, Static: 6s / 6s)
+  - PR checks: 12/12 successful.
+
+### Gate G4 (P01-D) TDD Red-Green-Refactor Evidence:
 1. **Invariants Enforced:**
-   - Typed error mapping in `SessionGuard`: throws `AppError.ownerMismatch` and `AppError.sessionChanged`.
-   - `ApprovalCoordinator`: Enforces `req.ownerID == currentSession.userID` and `req.sessionGeneration == currentSession.generation`.
-   - `ToolInvocationCoordinator`: Validates `currentSession.userID == authorizedCall.ownerID` and `currentSession.generation == authorizedCall.sessionGeneration` before any execution or receipt creation.
-   - `AppSession`: Cancellation handler registry (`registerCancellationHandler`, `unregisterCancellationHandler`); `switchProfile(to:)` immediately executes all cancellation handlers, clears handlers, advances generation UUID, flushes caches, and sets `storeRecoveryRequired` on corrupt preferences.
-   - `ChatViewModel`: In `send()`, registers cancellation handler with `session`; in `handleTurnEvent`, drops stale events and cancels turn if session generation or owner changed.
-   - `ConversationRepository`: `appendPendingUserMessage`, `appendAssistantCheckpoint`, `finishAssistantMessage`, and `deleteConversation` enforce `owner == session.userID`.
-   - `ConfigurationRepository`: `saveProviderConfig` enforces `config.ownerID == session.userID`.
+   - **Atomic Mutation via `SecItemUpdate`:** `KeychainVault.setSecret` attempts `SecItemUpdate` first. If update fails (e.g. device locked or OS error), existing secrets are never deleted. If item does not exist (`errSecItemNotFound`), `SecItemAdd` is executed.
+   - **Safe Rotation:** `KeychainVault.rotateSecret` uses `SecItemUpdate` and preserves existing secret on any failure (throws `VaultError.writeFailed`, `VaultError.locked`, or `VaultError.notFound`).
+   - **Dynamic Credential Registry:** Dynamic credentials (including custom endpoint API keys) are tracked in a persistent registry per owner; `KeychainVault.removeAll(ownerID:)` wipes all registered credentials and built-in provider credentials, leaving zero orphan secrets.
+   - **Locked Vault Handling:** Throws typed `VaultError.locked` upon `errSecInteractionNotAllowed`.
+   - **Conversation Pre-Validation:** `ConversationRepository.appendPendingUserMessage` validates owned conversation exists before inserting messages.
 2. **Local TDD Evidence:**
-   - Authored `SessionGuardTests.swift` with 11 tests covering direct `SessionGuard` checks, `ApprovalCoordinator` owner/generation/payload hash/expiry barriers, and `ToolInvocationCoordinator` pre-execution barriers.
-   - 32/32 portable core tests PASS.
-   - `scripts/swift-prepush.sh .`: 187 files syntax check PASS, 32/32 portable tests PASS.
+   - Authored `KeychainVaultTests.swift` with 9 tests covering basic round-trip, atomic update failure preservation, safe rotation, per-owner isolation, dynamic registry wipe, device lock handling, and removal untracking.
+   - 41/41 portable core tests PASS.
+   - `scripts/swift-prepush.sh .`: 187 files syntax check PASS, 41/41 portable tests PASS.
    - `docs/spec/v3/20_VALIDATE_HANDOFF.py`: 16/16 PASS.
    - `scratch/verify_matrix.py`: 46/46 PASS.
    - Kit integrity: 71/71 SHA-256 PASS.
-3. **Remote CI Verified:**
-   - Committed as `2f3b7fc` and `e1d685f` (actor isolation fix for `ChatViewModel.cancel()`), pushed to PR #2.
-   - Remote GitHub Actions CI Results for `e1d685f`:
-     - `ios-real-compiler-probe` (Run ID `36342532881` / PR Run ID `36342535171`): SUCCESS (Apple iOS App Build: 1m27s / 3m4s, Catalyst: 1m13s / 1m27s, Portable Core: 41s / 35s, Static: 5s / 6s)
-     - `iOS Build & Verify` (Run ID `36342532885` / PR Run ID `36342535302`): SUCCESS (Xcode iOS Build Verification: 1m35s / 1m9s, Static: 6s / 6s)
-     - PR checks: 12/12 successful.
 
-- **Next Action:** Advance to Gate G4 (Phase P01-D: Keychain Scoping & Rollover).
+- **Next Action:** Commit Gate G4, push to `feature/v2-overnight-20260927`, observe remote CI runs to terminal success, then advance to Gate G5 (Phase P02-A: Multi-turn Tool Receipt Durability).
