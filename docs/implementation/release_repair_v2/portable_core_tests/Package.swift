@@ -5,6 +5,9 @@ import PackageDescription
 
 let package = Package(
     name: "AppCorePortable",
+    platforms: [
+        .macOS(.v13)
+    ],
     products: [.library(name: "AppCorePortable", targets: ["AppCorePortable"])],
     targets: [
         .target(
