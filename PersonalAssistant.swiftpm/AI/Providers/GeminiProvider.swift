@@ -175,6 +175,8 @@ actor GeminiProvider: AssistantModel {
                 contents.append(GeminiContent(role: "model", parts: [GeminiPart(text: text)]))
             case .user:
                 contents.append(GeminiContent(role: "user", parts: [GeminiPart(text: text)]))
+            case .toolResult:
+                contents.append(GeminiContent(role: "user", parts: [GeminiPart(text: text)]))
             }
         }
 

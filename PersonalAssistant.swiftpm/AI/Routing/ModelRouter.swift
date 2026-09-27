@@ -107,8 +107,9 @@ actor ModelRouter {
             // Key check (Apple Foundation Models are local and do not require API keys)
             let requiresKey = (config.providerKind != .appleFoundation)
             if requiresKey {
-                let hasKey = await keychainVault.hasSecret(ownerID: ownerID, providerID: config.providerKind.rawValue) ||
-                             await keychainVault.hasSecret(ownerID: ownerID, providerID: config.id.rawValue.uuidString)
+                let hasKeyKind = await keychainVault.hasSecret(ownerID: ownerID, providerID: config.providerKind.rawValue)
+                let hasKeyUUID = await keychainVault.hasSecret(ownerID: ownerID, providerID: config.id.rawValue.uuidString)
+                let hasKey = hasKeyKind || hasKeyUUID
                 guard hasKey else { continue }
             }
 
