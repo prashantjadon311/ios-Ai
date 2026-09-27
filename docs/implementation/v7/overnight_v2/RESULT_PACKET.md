@@ -2,8 +2,8 @@
 
 **Branch:** `feature/v2-overnight-20260927`  
 **Base Commit:** `6d50333ebf401234c609c61b9f33cbe27728b1aa` (origin/main)  
-**Timestamp:** 2026-09-28T02:35:00+05:30
-**Current Gate:** Gate G5 (Phase P02 & P03) Completed & CI Green
+**Timestamp:** 2026-09-28T03:39:00+05:30
+**Current Gate:** Gate G9 (Phase P09 & P10) Completed & CI Green
 
 ---
 
@@ -17,10 +17,10 @@
 | **G3** | P01-C: Owner & Session Token Guarding | Red tests demonstrated missing session barriers in coordinator/guard | 32/32 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G4** | P01-D: Keychain Scoping & Rollover | Destructive delete-then-add in setSecret/rotateSecret and missing dynamic registry | 41/41 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G5** | P02/P03: Offline Task/Reminder Slice & Genuine App Shortcuts | Red tests demonstrated missing intent parsing, unvalidated action dispatch, and placeholder shortcuts | 64/64 tests pass; 189 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
-| **G6** | P04/P05: Approved V5 Adaptive UI + Streaming / Voice / Avatar | Pending | Pending | QUEUED |
-| **G7** | P08: Model providers, local-engine capability truth, provider catalog | Pending | Pending | QUEUED |
-| **G8** | P07: Project/progress flow and integration hardening | Pending | Pending | QUEUED |
-| **G9** | P09/P10: Firestore sync & encrypted Drive backup | Pending | Pending | QUEUED |
+| **G6** | P04/P05: Approved V5 Adaptive UI + Streaming / Voice / Avatar | Red tests demonstrated missing coalescer, lack of stream buffering, unhandled audio interruptions | 76/76 tests pass; 193 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
+| **G7** | P08: Model providers, local-engine capability truth, provider catalog | Red tests demonstrated missing adapters, missing subscription boundary checks, uncached router queries | 93/93 tests pass; 196 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
+| **G8** | P07: Project/progress flow and integration hardening | Red tests demonstrated missing project/category entities, unbounded dashboard queries, and lack of DST-aware filters | 105/105 tests pass; 201 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
+| **G9** | P09/P10: Firestore sync & encrypted Drive backup | Missing outbox contracts, lack of tamper-proofing, unverified owner binding, missing credentials handling | 118/118 tests pass; 205 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G10** | P11: Entire-system qualification & final draft PR | Pending | Pending | QUEUED |
 
 ---
@@ -263,6 +263,46 @@
 ### 9.2 Verification Command Evidence
 - Portable test suite: 105/105 tests PASS (added 12 tests in `ProjectAndProgressTests`).
 - `scripts/swift-prepush.sh .`: PASS (201 Swift files syntax check, 105 portable tests).
+- Static contract matrix: 46/46 PASS.
+- Handoff validation: 16/16 PASS.
+- Kit integrity: 71/71 SHA-256 PASS.
+
+---
+
+## 10. Gate G9 (P09/P10: Optional Cloud Integrations & Non-Blocking Local-First)
+
+- **Status:** PASS (Remote Apple CI & Portable Core Verified)
+- **Commit:** `7cb82f6` (`feat(sync-backup): implement G9 P09/P10 fail-closed optional cloud sync and encrypted backup`)
+- **Remote CI Results (12/12 CHECKS PASS):**
+  - `ios-real-compiler-probe` (Push Run `36354032321` / PR Run `36354035465`): SUCCESS
+    - Apple iOS App Build: 1m55s / 1m51s
+    - Apple Swift Compiler (Mac Catalyst): 1m31s / 1m24s
+    - Portable Swift Core Tests: 46s / 45s
+    - Static Contract & Schema Verification: 8s / 5s
+  - `iOS Build & Verify` (Push Run `36354032319` / PR Run `36354035350`): SUCCESS
+    - Xcode iOS Build Verification: 1m39s / 1m52s
+    - Static Contract & Schema Verification: 5s / 6s
+  - PR checks: 12/12 successful on PR #2.
+
+### 10.1 Invariants Enforced
+1. **P09: Optional Firestore Sync & Strict UID Scoping:**
+   - Defined `CloudSyncStatus` with truthful `.blockedMissingCredentials(reason:)` fail-closed state when Firebase credentials or project configuration are absent.
+   - Implemented `SyncOutboxRecord` with deterministic, owner-scoped `operationKey` (`"\(ownerID):\(entityType.rawValue):\(entityID):\(revision)"`).
+   - Authored `FirestoreSyncAdapter` enforcing per-owner outbox queue isolation, idempotent deduplication by `operationKey`, versioned tombstones (`isDeleted`, `deletedAt`), and zero data loss on sync cancellation (`cancelSync` preserves offline queue).
+   - Strict owner verification: queuing records with mismatched `ownerID` immediately throws typed `AppError.wrongOwner`.
+   - Authored authoritative `FirestoreSecurityRules` and `firestore.rules` strictly restricting reads and writes to authenticated UID matching the path (`request.auth.uid == userId`) with default deny-all.
+   - Local-first guarantee: local SwiftData storage operations never block on or require cloud sync.
+2. **P10: Optional Encrypted Google Drive Backup & Security Sanitization:**
+   - Defined `EncryptedBackupManifest` with tamper-evident authentication tags (`tagBase64`), SHA-256 checksums, and explicit user-held recovery key requirement.
+   - Authored `DriveBackupAdapter` enforcing strict payload inspection: recursively rejects any payload containing forbidden secrets (e.g. `apiKey`, `byokSecret`, `sessionToken`, `privateKey`, `password`, `keychainSecret`) with `AppError.validationFailed(field: "backup_payload_secrets", ...)`.
+   - Staged restore isolation: verifies owner binding and tamper tags before inspecting or staging content; mismatched owner immediately throws `AppError.wrongOwner` without modifying or previewing local store.
+   - Truthful credentials reporting: returns honest `BackupStatus.blockedMissingCredentials(reason:)` when Google Drive OAuth client credentials or tokens are absent.
+3. **Truthful Settings UI Disclosure:**
+   - Hardened `StorageSettingsView` under `Settings` showing `BLOCKED_NO_CREDENTIALS` for both optional cloud integrations while prominently certifying active on-device SwiftData persistence.
+
+### 10.2 Verification Command Evidence
+- Portable test suite: 118/118 tests PASS (added 13 tests in `CloudSyncAndBackupContractsTests`).
+- `scripts/swift-prepush.sh .`: PASS (205 Swift files syntax check, 118 portable tests).
 - Static contract matrix: 46/46 PASS.
 - Handoff validation: 16/16 PASS.
 - Kit integrity: 71/71 SHA-256 PASS.

@@ -172,4 +172,38 @@
        - Static Contract & Schema Verification: 6s / 5s
      - PR checks: 12/12 successful on PR #2.
 
-- **Next Action:** Advance to Gate G9 (Phase P09: Firestore sync & Phase P10: Encrypted Drive backup; honest `BLOCKED_NO_CREDENTIALS` if unconfigured).
+### Gate G9 (Phase P09 & P10) TDD Red-Green-Refactor Evidence:
+1. **Invariants Enforced:**
+   - **P09: Optional Firestore Sync & Strict UID Scoping:**
+     - Defined `CloudSyncStatus` with truthful `.blockedMissingCredentials(reason:)` fail-closed state when Firebase credentials or project configuration are absent.
+     - Implemented `SyncOutboxRecord` with deterministic, owner-scoped `operationKey` (`"\(ownerID):\(entityType.rawValue):\(entityID):\(revision)"`).
+     - Authored `FirestoreSyncAdapter` enforcing per-owner outbox queue isolation, idempotent deduplication by `operationKey`, versioned tombstones (`isDeleted`, `deletedAt`), and zero data loss on sync cancellation (`cancelSync` preserves offline queue).
+     - Strict owner verification: queuing records with mismatched `ownerID` immediately throws typed `AppError.wrongOwner`.
+     - Authored authoritative `FirestoreSecurityRules` and `firestore.rules` strictly restricting reads and writes to authenticated UID matching the path (`request.auth.uid == userId`) with default deny-all.
+     - Local-first guarantee: local SwiftData storage operations never block on or require cloud sync.
+   - **P10: Optional Encrypted Google Drive Backup & Security Sanitization:**
+     - Defined `EncryptedBackupManifest` with tamper-evident authentication tags (`tagBase64`), SHA-256 checksums, and explicit user-held recovery key requirement.
+     - Authored `DriveBackupAdapter` enforcing strict payload inspection: recursively rejects any payload containing forbidden secrets (e.g. `apiKey`, `byokSecret`, `sessionToken`, `privateKey`, `password`, `keychainSecret`) with `AppError.validationFailed(field: "backup_payload_secrets", ...)`.
+     - Staged restore isolation: verifies owner binding and tamper tags before inspecting or staging content; mismatched owner immediately throws `AppError.wrongOwner` without modifying or previewing local store.
+     - Truthful credentials reporting: returns honest `BackupStatus.blockedMissingCredentials(reason:)` when Google Drive OAuth client credentials or tokens are absent.
+   - **Truthful Settings UI Disclosure:**
+     - Hardened `StorageSettingsView` under `Settings` showing `BLOCKED_NO_CREDENTIALS` for both optional cloud integrations while prominently certifying active on-device SwiftData persistence.
+2. **Local TDD Evidence:**
+   - Authored 13 unit tests in `CloudSyncAndBackupContractsTests.swift` covering outbox key generation, deduplication, wrong-owner rejection, per-owner isolation, versioned tombstones, credential checks, manifest tamper-proofing, secret payload rejection, and security rules syntax.
+   - Total portable test suite: 118/118 portable tests PASS.
+   - `scripts/swift-prepush.sh .`: 205 Swift files syntax check PASS, 118/118 portable tests PASS.
+   - Contracts: 16/16 handoff PASS, 46/46 matrix PASS, 71/71 kit SHA-256 PASS.
+3. **Remote CI Verified:**
+   - Commit: `7cb82f6` (`feat(sync-backup): implement G9 P09/P10 fail-closed optional cloud sync and encrypted backup`)
+   - Remote GitHub Actions CI Results for `7cb82f6`:
+     - `ios-real-compiler-probe` (Push Run `36354032321` / PR Run `36354035465`): SUCCESS
+       - Apple iOS App Build: 1m55s / 1m51s
+       - Apple Swift Compiler (Mac Catalyst): 1m31s / 1m24s
+       - Portable Swift Core Tests: 46s / 45s
+       - Static Contract & Schema Verification: 8s / 5s
+     - `iOS Build & Verify` (Push Run `36354032319` / PR Run `36354035350`): SUCCESS
+       - Xcode iOS Build Verification: 1m39s / 1m52s
+       - Static Contract & Schema Verification: 5s / 6s
+     - PR checks: 12/12 successful on PR #2.
+
+- **Next Action:** Advance to Gate G10 (Phase P11: Entire-system qualification + documentation and final draft PR).
