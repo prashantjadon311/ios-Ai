@@ -12,6 +12,8 @@ enum AppError: Error, Sendable, Equatable {
     case sessionChanged(expectedGeneration: UUID, currentGeneration: UUID)
     case permissionDenied(resource: String)
     case ownerMismatch(requested: UserID, current: UserID)
+    case wrongOwner(expected: String, actual: String)
+    case unauthorized(reason: String)
 
     // Provider / AI
     case unsupportedCapability(String)

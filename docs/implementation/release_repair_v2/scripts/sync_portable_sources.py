@@ -41,6 +41,10 @@ FILES = [
     'Domain/ReminderDefinition.swift',
     'Tasks/TaskProgress.swift',
     'Tasks/TaskDateQueries.swift',
+    'Domain/SyncAndBackupContracts.swift',
+    'Integrations/FirestoreSyncAdapter.swift',
+    'Integrations/DriveBackupAdapter.swift',
+    'Integrations/FirestoreSecurityRules.swift',
 ]
 
 def main():

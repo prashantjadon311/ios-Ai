@@ -44,6 +44,10 @@ FILES=(
     'Domain/ReminderDefinition.swift'
     'Tasks/TaskProgress.swift'
     'Tasks/TaskDateQueries.swift'
+    'Domain/SyncAndBackupContracts.swift'
+    'Integrations/FirestoreSyncAdapter.swift'
+    'Integrations/DriveBackupAdapter.swift'
+    'Integrations/FirestoreSecurityRules.swift'
 )
 for file in "${FILES[@]}"; do
     [[ -f "$SOURCE/$file" ]] || { printf 'ERROR: Missing original source: %s\n' "$file" >&2; exit 4; }
