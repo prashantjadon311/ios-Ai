@@ -88,6 +88,16 @@ actor AssistantOrchestrator {
 
                 var hasEmittedVisibleToken = false
 
+                let coalescer = StreamingDeltaCoalescer(flushThreshold: 128) { delta in
+                    _ = try? await conversationRepository.appendAssistantCheckpoint(
+                        traceID: traceID,
+                        conversationID: conversationID,
+                        ownerID: ownerID,
+                        deltaText: delta,
+                        session: session
+                    )
+                }
+
                 do {
                     let stream = try await provider.stream(routedRequest)
                     for try await event in stream {
@@ -98,14 +108,7 @@ actor AssistantOrchestrator {
                         case .textDelta(let delta, let seq):
                             hasEmittedVisibleToken = true
                             await onEvent(.textDelta(delta, sequence: seq))
-
-                            _ = try? await conversationRepository.appendAssistantCheckpoint(
-                                traceID: traceID,
-                                conversationID: conversationID,
-                                ownerID: ownerID,
-                                deltaText: delta,
-                                session: session
-                            )
+                            try? await coalescer.append(delta: delta)
 
                         case .toolProposal(let proposal):
                             // Intentional validated action handoff with required approval (Contract P02, Prompt 05)
@@ -118,6 +121,7 @@ actor AssistantOrchestrator {
                                 )
                                 switch decision {
                                 case .deny(let reason):
+                                    try? await coalescer.flush()
                                     await onEvent(.failed(traceID: traceID, error: .toolExecutionFailed(toolID: proposal.toolID, message: reason)))
                                     return
                                 case .ask(let approvalRequest):
@@ -143,6 +147,7 @@ actor AssistantOrchestrator {
                                     await onEvent(.toolProposalPending(approvalRequest))
                                 }
                             } catch {
+                                try? await coalescer.flush()
                                 await onEvent(.failed(traceID: traceID, error: .toolExecutionFailed(toolID: proposal.toolID, message: error.localizedDescription)))
                                 return
                             }
@@ -161,6 +166,7 @@ actor AssistantOrchestrator {
                             await onEvent(.usageUpdate(usage))
 
                         case .completed(let finishReason):
+                            try? await coalescer.flush()
                             _ = try? await conversationRepository.finishAssistantMessage(
                                 traceID: traceID,
                                 ownerID: ownerID,
@@ -171,6 +177,7 @@ actor AssistantOrchestrator {
                             return
 
                         case .failed(let failure):
+                            try? await coalescer.flush()
                             if hasEmittedVisibleToken {
                                 _ = try? await conversationRepository.finishAssistantMessage(
                                     traceID: traceID,
@@ -186,6 +193,7 @@ actor AssistantOrchestrator {
                         }
                     }
                 } catch is CancellationError {
+                    try? await coalescer.flush()
                     if hasEmittedVisibleToken {
                         _ = try? await conversationRepository.finishAssistantMessage(
                             traceID: traceID,
@@ -196,6 +204,7 @@ actor AssistantOrchestrator {
                     }
                     await onEvent(.interrupted(traceID: traceID, reason: "Cancelled by user"))
                 } catch {
+                    try? await coalescer.flush()
                     if hasEmittedVisibleToken {
                         _ = try? await conversationRepository.finishAssistantMessage(
                             traceID: traceID,

@@ -35,6 +35,7 @@ final class VoiceCoordinator {
     // Monotonically increasing session ID — new on every start (B07)
     private var sessionGeneration: Int = 0
     private var streamTask: Task<Void, Never>?
+    private var interruptionHandler: AudioInterruptionHandler?
 
     init(
         capabilityCenter: CapabilityCenter,
@@ -46,6 +47,11 @@ final class VoiceCoordinator {
         self.commandBus = commandBus
         self.microphoneCapture = microphoneCapture
         self.speechRecognizer = speechRecognizer
+        self.interruptionHandler = AudioInterruptionHandler { [weak self] in
+            Task { @MainActor in
+                self?.handleInterruption()
+            }
+        }
     }
 
     // MARK: - Begin (must be from direct user intent only — B07)

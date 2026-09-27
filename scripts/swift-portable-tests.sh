@@ -34,6 +34,7 @@ FILES=(
     'Tasks/LocalIntentParser.swift'
     'Tasks/ApplicationActionCoordinator.swift'
     'Integrations/ShortcutsBridge.swift'
+    'AI/Transport/StreamingDeltaCoalescer.swift'
 )
 for file in "${FILES[@]}"; do
     [[ -f "$SOURCE/$file" ]] || { printf 'ERROR: Missing original source: %s\n' "$file" >&2; exit 4; }

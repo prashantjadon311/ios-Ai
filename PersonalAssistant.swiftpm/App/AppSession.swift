@@ -183,6 +183,23 @@ final class AppSession {
         preferences = next
     }
 
+    func updateAppearanceMode(_ mode: AppearanceMode) async throws {
+        guard let owner = currentProfile else { throw AppError.notAuthenticated }
+        var next = preferences ?? AppPreference(ownerID: owner.id)
+        next.appearanceMode = mode
+        next.updatedAt = Date()
+        try await configurationRepository.savePreferences(next)
+        preferences = next
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch preferences?.appearanceMode ?? .system {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return nil
+        }
+    }
+
     // MARK: - Lock
 
     func lock() {

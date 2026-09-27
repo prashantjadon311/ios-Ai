@@ -4,6 +4,8 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @Environment(AppSession.self) private var session
     @State private var appearance: AppearanceMode = .system
+    @State private var isSaving: Bool = false
+    @State private var saveError: String?
 
     var body: some View {
         Form {
@@ -14,7 +16,40 @@ struct AppearanceSettingsView: View {
                     Text("Dark").tag(AppearanceMode.dark)
                 }
                 .pickerStyle(.inline)
+                .onChange(of: appearance) { _, newMode in
+                    Task {
+                        isSaving = true
+                        saveError = nil
+                        do {
+                            try await session.updateAppearanceMode(newMode)
+                        } catch {
+                            saveError = error.localizedDescription
+                        }
+                        isSaving = false
+                    }
+                }
             }
+
+            if isSaving {
+                Section {
+                    HStack {
+                        ProgressView()
+                            .padding(.trailing, 8)
+                        Text("Applying theme…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if let saveError {
+                Section {
+                    Text("Failed to save appearance: \(saveError)")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
             Section("Information") {
                 Text("Adapts typography, contrast, and layout to system Dynamic Type and appearance preferences.")
                     .font(.caption)

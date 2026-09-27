@@ -7,12 +7,18 @@ import SwiftUI
 import Observation
 
 /// Primary navigation destinations (five screens + chat/approvals as routed surfaces).
-enum AppDestination: Hashable, Equatable {
-    case dashboard
-    case tasks
-    case history
-    case configuration
-    case settings
+enum AppDestination: String, Hashable, Equatable, CaseIterable {
+    case dashboard = "Home"
+    case history = "Conversations"
+    case tasks = "Tasks & Projects"
+    case reminders = "Reminders"
+    case memory = "Memory"
+    case assistants = "Assistants"
+    case configuration = "AI Providers"
+    case settings = "Settings"
+    case profile = "Profile"
+
+    static var conversations: AppDestination { .history }
 }
 
 /// Modal sheets that can appear over any destination.
@@ -43,7 +49,6 @@ struct ChatLaunchIntent: Hashable, Sendable {
     let conversationID: ConversationID
     let initialText: String?
     let launchNonce: UUID
-
     init(conversationID: ConversationID, initialText: String?, launchNonce: UUID = UUID()) {
         self.conversationID = conversationID
         self.initialText = initialText
@@ -58,11 +63,25 @@ final class AppRouter {
     var presentedSheet: AppSheet?
     var navigationPath: NavigationPath = NavigationPath()
     var pendingLaunchIntent: ChatLaunchIntent?
+    var isDrawerOpen: Bool = false
 
     // MARK: - Navigation actions
 
     func navigate(to destination: AppDestination) {
         selectedDestination = destination
+        isDrawerOpen = false
+    }
+
+    func openDrawer() {
+        isDrawerOpen = true
+    }
+
+    func closeDrawer() {
+        isDrawerOpen = false
+    }
+
+    func toggleDrawer() {
+        isDrawerOpen.toggle()
     }
 
     func openChat(conversationID: ConversationID) {

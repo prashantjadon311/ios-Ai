@@ -49,7 +49,12 @@ struct ConfigurationView: View {
                     }
                 }
             }
-            .navigationTitle("Configuration")
+            .navigationTitle("AI Providers")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    TopRightAvatarNavButton()
+                }
+            }
         }
     }
 }

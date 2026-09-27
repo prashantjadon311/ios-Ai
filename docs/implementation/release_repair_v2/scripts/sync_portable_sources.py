@@ -31,6 +31,7 @@ FILES = [
     'Tasks/LocalIntentParser.swift',
     'Tasks/ApplicationActionCoordinator.swift',
     'Integrations/ShortcutsBridge.swift',
+    'AI/Transport/StreamingDeltaCoalescer.swift',
 ]
 
 def main():

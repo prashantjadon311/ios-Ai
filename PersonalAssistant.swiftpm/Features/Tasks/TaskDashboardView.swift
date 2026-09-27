@@ -20,12 +20,16 @@ struct TaskDashboardView: View {
             .navigationTitle("Tasks")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        viewModel?.onCreate()
-                    } label: {
-                        Label("New Task", systemImage: "plus")
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        Button {
+                            viewModel?.onCreate()
+                        } label: {
+                            Label("New Task", systemImage: "plus")
+                        }
+                        .accessibilityLabel("Create new task")
+
+                        TopRightAvatarNavButton()
                     }
-                    .accessibilityLabel("Create new task")
                 }
             }
             .task {
