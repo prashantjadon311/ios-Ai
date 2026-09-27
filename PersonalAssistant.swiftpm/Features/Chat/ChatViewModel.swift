@@ -148,7 +148,7 @@ final class ChatViewModel {
         )
 
         let cancelID = session.registerCancellationHandler { [weak self] in
-            self?.cancel()
+            await self?.cancel()
         }
 
         streamingTask = Task {
@@ -190,7 +190,7 @@ final class ChatViewModel {
             break
         case .usageUpdate:
             break
-        case .completed(let tid, let reason):
+        case .completed(_, let reason):
             if !self.streamingText.isEmpty {
                 if let msgs = try? await self.conversationRepository.pageMessages(
                     owner: ownerID,
