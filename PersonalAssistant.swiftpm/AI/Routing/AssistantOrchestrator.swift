@@ -11,19 +11,22 @@ actor AssistantOrchestrator {
     private let memoryRepository: MemoryRepository
     private let auditRepository: AuditRepository
     private let router: ModelRouter
+    private let policyEngine: ToolPolicyEngine
 
     init(
         conversationRepository: ConversationRepository,
         configurationRepository: ConfigurationRepository,
         memoryRepository: MemoryRepository,
         auditRepository: AuditRepository,
-        modelRouter: ModelRouter
+        modelRouter: ModelRouter,
+        policyEngine: ToolPolicyEngine = ToolPolicyEngine()
     ) {
         self.conversationRepository = conversationRepository
         self.configurationRepository = configurationRepository
         self.memoryRepository = memoryRepository
         self.auditRepository = auditRepository
         self.router = modelRouter
+        self.policyEngine = policyEngine
     }
 
     // MARK: - Execute turn (B03/B04 pipeline)
@@ -104,8 +107,45 @@ actor AssistantOrchestrator {
                                 session: session
                             )
 
-                        case .toolProposal:
-                            break
+                        case .toolProposal(let proposal):
+                            // Intentional validated action handoff with required approval (Contract P02, Prompt 05)
+                            do {
+                                let decision = try policyEngine.evaluate(
+                                    proposal: proposal,
+                                    ownerID: ownerID,
+                                    session: session,
+                                    privacyMode: prefs.privacyMode
+                                )
+                                switch decision {
+                                case .deny(let reason):
+                                    await onEvent(.failed(traceID: traceID, error: .toolExecutionFailed(toolID: proposal.toolID, message: reason)))
+                                    return
+                                case .ask(let approvalRequest):
+                                    await onEvent(.toolProposalPending(approvalRequest))
+                                case .permit(let authorized):
+                                    let approvalRequest = ApprovalRequest(
+                                        id: authorized.approvalID,
+                                        invocationID: authorized.invocationID,
+                                        toolID: authorized.toolID,
+                                        schemaVersion: authorized.schemaVersion,
+                                        ownerID: authorized.ownerID,
+                                        traceID: authorized.traceID,
+                                        payloadHash: authorized.payloadHash,
+                                        riskLevel: .low,
+                                        humanReadableSummary: "Permitted tool: \(authorized.toolID)",
+                                        recipient: "Local",
+                                        dataClasses: [.personal],
+                                        canonicalArguments: authorized.canonicalArguments,
+                                        sessionGeneration: authorized.sessionGeneration,
+                                        expiresAt: authorized.expiresAt,
+                                        status: .approved
+                                    )
+                                    await onEvent(.toolProposalPending(approvalRequest))
+                                }
+                            } catch {
+                                await onEvent(.failed(traceID: traceID, error: .toolExecutionFailed(toolID: proposal.toolID, message: error.localizedDescription)))
+                                return
+                            }
 
                         case .usage(let input, let output, let cost):
                             let usage = UsageEstimate(

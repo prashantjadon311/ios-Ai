@@ -34,6 +34,8 @@ final class AppContainer {
     let toolPolicyEngine: ToolPolicyEngine
     let toolInvocationCoordinator: ToolInvocationCoordinator
     let approvalCoordinator: ApprovalCoordinator
+    let reminderScheduler: LocalReminderScheduler
+    let actionCoordinator: ApplicationActionCoordinator
 
     // Voice & Command Bus
     let commandBus: ApplicationCommandBus
@@ -109,7 +111,16 @@ final class AppContainer {
         )
         self.approvalCoordinator = ApprovalCoordinator()
 
-        let bus = ApplicationCommandBus(session: self.session, router: self.router)
+        let scheduler = LocalReminderScheduler()
+        self.reminderScheduler = scheduler
+        let actCoordinator = ApplicationActionCoordinator(
+            taskRepository: taskRepo,
+            receiptStore: receiptStore,
+            reminderScheduler: scheduler
+        )
+        self.actionCoordinator = actCoordinator
+
+        let bus = ApplicationCommandBus(session: self.session, router: self.router, actionCoordinator: actCoordinator)
         self.commandBus = bus
         self.voiceCoordinator = VoiceCoordinator(capabilityCenter: self.capabilityCenter, commandBus: bus)
 

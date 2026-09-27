@@ -224,3 +224,5 @@ actor TaskRepository {
         }
     }
 }
+
+extension TaskRepository: TaskRepositoryProtocol {}

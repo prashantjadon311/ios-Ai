@@ -28,6 +28,12 @@ FILES=(
     'Security/SessionGuard.swift'
     'Security/ApprovalCoordinator.swift'
     'Security/KeychainVault.swift'
+    'Domain/AssistantProfile.swift'
+    'Domain/ActionContracts.swift'
+    'Tasks/LocalReminderScheduler.swift'
+    'Tasks/LocalIntentParser.swift'
+    'Tasks/ApplicationActionCoordinator.swift'
+    'Integrations/ShortcutsBridge.swift'
 )
 for file in "${FILES[@]}"; do
     [[ -f "$SOURCE/$file" ]] || { printf 'ERROR: Missing original source: %s\n' "$file" >&2; exit 4; }

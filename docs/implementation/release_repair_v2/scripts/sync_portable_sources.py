@@ -25,6 +25,12 @@ FILES = [
     'Security/SessionGuard.swift',
     'Security/ApprovalCoordinator.swift',
     'Security/KeychainVault.swift',
+    'Domain/AssistantProfile.swift',
+    'Domain/ActionContracts.swift',
+    'Tasks/LocalReminderScheduler.swift',
+    'Tasks/LocalIntentParser.swift',
+    'Tasks/ApplicationActionCoordinator.swift',
+    'Integrations/ShortcutsBridge.swift',
 ]
 
 def main():
