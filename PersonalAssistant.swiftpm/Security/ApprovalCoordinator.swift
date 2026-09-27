@@ -30,9 +30,15 @@ actor ApprovalCoordinator {
             throw AppError.validationFailed(field: "expiresAt", reason: "Approval request has expired")
         }
 
-        // Session binding enforcement: generation must match
+        // Owner and session binding enforcement
+        guard req.ownerID == currentSession.userID else {
+            throw AppError.ownerMismatch(requested: req.ownerID, current: currentSession.userID)
+        }
         guard req.sessionGeneration == currentSession.generation else {
-            throw AppError.validationFailed(field: "sessionToken", reason: "Session generation mismatch")
+            throw AppError.sessionChanged(
+                expectedGeneration: req.sessionGeneration,
+                currentGeneration: currentSession.generation
+            )
         }
 
         // Exact cryptographic digest match (mandatory, fail-closed)

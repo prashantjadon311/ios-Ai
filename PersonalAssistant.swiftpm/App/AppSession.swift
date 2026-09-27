@@ -29,6 +29,18 @@ final class AppSession {
     /// Store recovery is required — show diagnostics screen.
     private(set) var storeRecoveryRequired: Bool = false
     private(set) var storeRecoveryReason: String?
+    private var activeCancellationHandlers: [UUID: @Sendable () async -> Void] = [:]
+
+    @discardableResult
+    func registerCancellationHandler(_ handler: @escaping @Sendable () async -> Void) -> UUID {
+        let id = UUID()
+        activeCancellationHandlers[id] = handler
+        return id
+    }
+
+    func unregisterCancellationHandler(id: UUID) {
+        activeCancellationHandlers.removeValue(forKey: id)
+    }
 
     // MARK: - Dependencies
 
@@ -103,7 +115,13 @@ final class AppSession {
     func switchProfile(to targetProfile: UserProfile) async throws {
         // 1. Increment generation to invalidate old callbacks
         sessionToken = SessionToken(userID: targetProfile.id)
-        // 2. Clear caches
+        // 2. Cancel all registered in-flight work immediately
+        let handlers = Array(activeCancellationHandlers.values)
+        activeCancellationHandlers.removeAll()
+        for handler in handlers {
+            await handler()
+        }
+        // 3. Clear caches
         activeAssistant = nil
         assistantProfiles = []
         preferences = nil

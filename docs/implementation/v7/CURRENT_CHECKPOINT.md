@@ -1,4 +1,4 @@
-# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G2: PHASE P01-B COMPLETE)
+# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G3: PHASE P01-C IN PROGRESS / PRE-PUSH)
 
 - **Active Checkpoint File:** `docs/implementation/v7/CURRENT_CHECKPOINT.md` (mutable, active execution authority)
 - **Kit Reference Checkpoint:** `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/evidence/CURRENT_CHECKPOINT.md` (immutable, pinned to kit manifest)
@@ -26,20 +26,32 @@
   - PR checks: 12/12 successful.
 
 ### Gate G2 (P01-B) TDD Red-Green-Refactor Evidence:
-1. **Red Phase Verified:**
-   - Authored `ToolReceiptTests.swift` (7 unit tests) targeting failure to persist PREPARED (0 side effects), external action success with failed receipt write (.ambiguous, throws `sideEffectAmbiguous`), cached duplicate requests without re-executing side effects, startup crash reconciliation, mid-execution cancellation (.ambiguous), expired approvals (zero side effects), and session mismatches (zero side effects).
-   - Verified red failures against unmodified receipt store and coordinator.
-2. **Implementation (Green Phase):**
-   - `PersonalAssistant.swiftpm/Persistence/StoreModels.swift`: Added `@Attribute(.unique) var operationKey: String` to `StoredToolReceipt`.
-   - `PersonalAssistant.swiftpm/Domain/ApprovalRequest.swift`: Allowed mutating `externalReference` and `redactedResult` for status updates.
-   - `PersonalAssistant.swiftpm/Tools/ToolReceiptStore.swift`: Implemented `#if canImport(SwiftData)` portability seam, pre-checking duplicate `operationKey`, throwing `updateStatus`, test fault injection hooks (`setRecordPreparedHook`, `setUpdateStatusHook`), and `reconcileStartup()`.
-   - `PersonalAssistant.swiftpm/Tools/ToolInvocationCoordinator.swift`: Scoped idempotency key to owner: `"\(ownerID):\(toolID):\(invocationID)"`. Ensured if `updateStatus` fails after executor finishes, receipt transitions to `.ambiguous` and throws `AppError.sideEffectAmbiguous(operationKey:)`. Throws `sideEffectAmbiguous` on task cancellation.
-   - Extended portable sync scripts (`sync_portable_sources.py` & `swift-portable-tests.sh`) to sync 11 production files.
-3. **Green Phase Verified:**
-   - `swift test --package-path docs/implementation/release_repair_v2/portable_core_tests`: 21/21 tests pass, 0 failures, 0 warnings.
-   - `scripts/swift-prepush.sh .`: 187 files syntax check PASS, 21/21 portable tests PASS.
+- Authored `ToolReceiptTests.swift` (7 unit tests).
+- Implemented `@Attribute(.unique) var operationKey: String` in `StoredToolReceipt`.
+- Scoped idempotency key to owner: `"\(ownerID):\(toolID):\(invocationID)"`.
+- Enforced durable ambiguity contract (if side effect succeeds but receipt write fails -> `.ambiguous` and throws `AppError.sideEffectAmbiguous`).
+- Implemented startup crash reconciliation (`reconcileStartup()`).
+- Committed as `86caf21` and pushed to PR #2.
+- Remote GitHub Actions CI Results:
+  - `ios-real-compiler-probe` (Run ID `36341490935`): SUCCESS (Apple iOS App Build: 1m25s, Catalyst: 1m41s, Portable Core: 41s, Static: 5s)
+  - `iOS Build & Verify` (Run ID `36341490958`): SUCCESS (Xcode iOS Build Verification: 1m40s, Static: 7s)
+  - PR checks: 12/12 successful.
+
+### Gate G3 (P01-C) TDD Red-Green-Refactor Evidence:
+1. **Invariants Enforced:**
+   - Typed error mapping in `SessionGuard`: throws `AppError.ownerMismatch` and `AppError.sessionChanged`.
+   - `ApprovalCoordinator`: Enforces `req.ownerID == currentSession.userID` and `req.sessionGeneration == currentSession.generation`.
+   - `ToolInvocationCoordinator`: Validates `currentSession.userID == authorizedCall.ownerID` and `currentSession.generation == authorizedCall.sessionGeneration` before any execution or receipt creation.
+   - `AppSession`: Cancellation handler registry (`registerCancellationHandler`, `unregisterCancellationHandler`); `switchProfile(to:)` immediately executes all cancellation handlers, clears handlers, advances generation UUID, flushes caches, and sets `storeRecoveryRequired` on corrupt preferences.
+   - `ChatViewModel`: In `send()`, registers cancellation handler with `session`; in `handleTurnEvent`, drops stale events and cancels turn if session generation or owner changed.
+   - `ConversationRepository`: `appendPendingUserMessage`, `appendAssistantCheckpoint`, `finishAssistantMessage`, and `deleteConversation` enforce `owner == session.userID`.
+   - `ConfigurationRepository`: `saveProviderConfig` enforces `config.ownerID == session.userID`.
+2. **Local TDD Evidence:**
+   - Authored `SessionGuardTests.swift` with 11 tests covering direct `SessionGuard` checks, `ApprovalCoordinator` owner/generation/payload hash/expiry barriers, and `ToolInvocationCoordinator` pre-execution barriers.
+   - 32/32 portable core tests PASS.
+   - `scripts/swift-prepush.sh .`: 187 files syntax check PASS, 32/32 portable tests PASS.
    - `docs/spec/v3/20_VALIDATE_HANDOFF.py`: 16/16 PASS.
    - `scratch/verify_matrix.py`: 46/46 PASS.
    - Kit integrity: 71/71 SHA-256 PASS.
 
-- **Next Action:** Commit Gate G2 changes, push to `feature/v2-overnight-20260927`, monitor CI run to terminal status, advance to Gate G3 (P01-C Owner & Session Token Guarding).
+- **Next Action:** Commit Gate G3, push to `feature/v2-overnight-20260927`, observe remote CI runs to terminal success, then advance to Gate G4 (Phase P01-D: Keychain Scoping & Rollover).

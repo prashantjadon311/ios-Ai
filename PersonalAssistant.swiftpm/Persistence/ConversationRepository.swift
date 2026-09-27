@@ -57,6 +57,9 @@ actor ConversationRepository {
         parts: [ContentPart],
         session: SessionToken
     ) async throws -> MessageRecord {
+        guard owner == session.userID else {
+            throw AppError.ownerMismatch(requested: owner, current: session.userID)
+        }
         // Fetch next sequence number
         let ownerUUID = owner.rawValue
         let convUUID = conversationID.rawValue
@@ -101,6 +104,9 @@ actor ConversationRepository {
         deltaText: String,
         session: SessionToken
     ) async throws -> MessageID {
+        guard ownerID == session.userID else {
+            throw AppError.ownerMismatch(requested: ownerID, current: session.userID)
+        }
         let convUUID = conversationID.rawValue
         let ownerUUID = ownerID.rawValue
         let traceUUID = traceID.rawValue
@@ -165,6 +171,9 @@ actor ConversationRepository {
         status: MessageStatus,
         session: SessionToken
     ) async throws {
+        guard ownerID == session.userID else {
+            throw AppError.ownerMismatch(requested: ownerID, current: session.userID)
+        }
         let traceUUID = traceID.rawValue
         let ownerUUID = ownerID.rawValue
         try await MainActor.run {
@@ -209,6 +218,9 @@ actor ConversationRepository {
         owner: UserID,
         session: SessionToken
     ) async throws {
+        guard owner == session.userID else {
+            throw AppError.ownerMismatch(requested: owner, current: session.userID)
+        }
         let convUUID = id.rawValue
         let ownerUUID = owner.rawValue
         try await MainActor.run {

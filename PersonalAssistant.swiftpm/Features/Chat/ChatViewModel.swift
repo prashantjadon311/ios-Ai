@@ -147,14 +147,22 @@ final class ChatViewModel {
             session: sessionToken
         )
 
+        let cancelID = session.registerCancellationHandler { [weak self] in
+            self?.cancel()
+        }
+
         streamingTask = Task {
+            defer {
+                self.session.unregisterCancellationHandler(id: cancelID)
+            }
             await orchestrator.executeTurn(request: request) { [weak self] event in
                 guard let self else { return }
                 await self.handleTurnEvent(
                     event,
                     ownerID: owner.id,
                     conversationID: cid,
-                    traceID: traceID
+                    traceID: traceID,
+                    expectedSession: sessionToken
                 )
             }
         }
@@ -164,8 +172,15 @@ final class ChatViewModel {
         _ event: TurnUIEvent,
         ownerID: UserID,
         conversationID: ConversationID,
-        traceID: TraceID
+        traceID: TraceID,
+        expectedSession: SessionToken
     ) async {
+        guard let currentSession = session.sessionToken,
+              currentSession.userID == expectedSession.userID,
+              currentSession.generation == expectedSession.generation else {
+            cancel()
+            return
+        }
         switch event {
         case .started:
             self.streamingText = ""

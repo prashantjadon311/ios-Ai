@@ -22,6 +22,8 @@ FILES = [
     'Domain/ApprovalRequest.swift',
     'Tools/ToolReceiptStore.swift',
     'Tools/ToolInvocationCoordinator.swift',
+    'Security/SessionGuard.swift',
+    'Security/ApprovalCoordinator.swift',
 ]
 
 def main():

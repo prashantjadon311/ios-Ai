@@ -24,12 +24,20 @@ actor ToolInvocationCoordinator {
             throw AppError.approvalExpired(invocationID: authorizedCall.invocationID)
         }
 
-        // Session generation check
-        if let currentSession, currentSession.generation != authorizedCall.sessionGeneration {
-            throw AppError.sessionChanged(
-                expectedGeneration: authorizedCall.sessionGeneration,
-                currentGeneration: currentSession.generation
-            )
+        // Session and owner binding check
+        if let currentSession {
+            if currentSession.userID != authorizedCall.ownerID {
+                throw AppError.ownerMismatch(
+                    requested: authorizedCall.ownerID,
+                    current: currentSession.userID
+                )
+            }
+            if currentSession.generation != authorizedCall.sessionGeneration {
+                throw AppError.sessionChanged(
+                    expectedGeneration: authorizedCall.sessionGeneration,
+                    currentGeneration: currentSession.generation
+                )
+            }
         }
 
         // Owner-bound idempotency key (Prompt 03 P01-B item c)

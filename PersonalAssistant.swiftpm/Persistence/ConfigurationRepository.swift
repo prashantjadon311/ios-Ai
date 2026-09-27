@@ -208,6 +208,9 @@ actor ConfigurationRepository {
     }
 
     func saveProviderConfig(_ config: ProviderConfiguration, session: SessionToken) async throws {
+        guard config.ownerID == session.userID else {
+            throw AppError.ownerMismatch(requested: config.ownerID, current: session.userID)
+        }
         try await MainActor.run {
             let id = config.id.rawValue
             let descriptor = FetchDescriptor<StoredProviderConfiguration>(
