@@ -1,10 +1,11 @@
-# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G1: PHASE P01-A COMPLETE)
+# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G2: PHASE P01-B COMPLETE)
 
 - **Active Checkpoint File:** `docs/implementation/v7/CURRENT_CHECKPOINT.md` (mutable, active execution authority)
 - **Kit Reference Checkpoint:** `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/evidence/CURRENT_CHECKPOINT.md` (immutable, pinned to kit manifest)
 - **Code-Ready Packet:** `docs/implementation/v7/P01A_FINAL_CODE_READY_PACKET.md`
 - **Current Git Branch:** `feature/v2-overnight-20260927` (branched from verified `origin/main` `6d50333ebf401234c609c61b9f33cbe27728b1aa`)
 - **Remote `origin/main` Commit:** `6d50333ebf401234c609c61b9f33cbe27728b1aa` (Merge pull request #1 from `repair/v2-compiler-fix`)
+- **Active Pull Request:** [#2](https://github.com/prashantjadon311/ios-Ai/pull/2) (Draft: `Overnight V2 Campaign: G0–G10 Autonomous Execution`)
 - **Host OS:** Ubuntu 26.04.1 LTS (Resolute Raccoon, x86_64, Linux kernel 6.17.0-14-generic)
 - **Host Swift Version:** Swift 6.4 (`swift-6.4-RELEASE`, Target: `x86_64-unknown-linux-gnu`) via swiftly (`/home/thakur/.local/share/swiftly/bin/swift`)
 - **Kit Integrity Status:** `KIT_ONLY_PASS: verified 71 file SHA256` via `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/scripts/verify-kit.sh` (0 modifications to kit)
@@ -16,26 +17,29 @@
 - Python contracts: 16/16 PASS (`20_VALIDATE_HANDOFF.py`), 46/46 PASS (`verify_matrix.py`), 4/4 PASS (`test_chat_slice.py`)
 - Swift syntax check: 187 files parsed individually with Swift 6 syntax: PASS
 
-### Gate G1 (P01-A) TDD Red-Green-Refactor Evidence:
+### Gate G1 (P01-A) TDD & Remote CI Evidence:
+- Local TDD: 14/14 tests pass (`PrivacyAndConsentTests.swift`)
+- Committed as `d37513b1ec4c628eff56730c776d25d2bd984765` and pushed to PR #2
+- Remote GitHub Actions CI Results:
+  - `ios-real-compiler-probe` (Run ID `36339645346`): SUCCESS (Apple iOS App Build: 1m54s, Catalyst: 1m7s, Portable Core: 37s, Static: 6s)
+  - `iOS Build & Verify` (Run ID `36339645365`): SUCCESS (Xcode iOS Build Verification: 1m46s, Static: 7s)
+  - PR checks: 12/12 successful.
+
+### Gate G2 (P01-B) TDD Red-Green-Refactor Evidence:
 1. **Red Phase Verified:**
-   - Authored `PrivacyAndConsentTests.swift` (10 unit tests) targeting destination consent, fail-closed `privateOnly`, revocation, sensitivity ceiling, HTTPS normalization, and secret data blocking.
-   - Initial run verified RED failure (compilation failed against unmodified domain types).
+   - Authored `ToolReceiptTests.swift` (7 unit tests) targeting failure to persist PREPARED (0 side effects), external action success with failed receipt write (.ambiguous, throws `sideEffectAmbiguous`), cached duplicate requests without re-executing side effects, startup crash reconciliation, mid-execution cancellation (.ambiguous), expired approvals (zero side effects), and session mismatches (zero side effects).
+   - Verified red failures against unmodified receipt store and coordinator.
 2. **Implementation (Green Phase):**
-   - `PersonalAssistant.swiftpm/Domain/PrivacyAndConsent.swift`: Changed default `AppPreference.privacyMode` to `.privateOnly`. Added `providerConfigID`, `endpointOrigin`, and `scopeKey` to `ConsentRecord`. Added `grantConsent` and `revokeConsent` mutations.
-   - `PersonalAssistant.swiftpm/Domain/ProviderConfiguration.swift`: Added `ProviderKind.egressDestination` and `ProviderConfiguration.normalizedEndpointOrigin` (enforces HTTPS only, scheme://host:port).
-   - `PersonalAssistant.swiftpm/Security/PrivacyPolicyEngine.swift`: Added destination-aware `checkEgressAllowed(destination:privacyMode:dataClass:consent:)`.
-   - `PersonalAssistant.swiftpm/Persistence/ConfigurationRepository.swift`: Enforced fail-closed on corrupt `privacyModeRaw`, corrupt JSON, and duplicate consent scopes. Added atomic `grantConsent` and `revokeConsent`.
-   - `PersonalAssistant.swiftpm/AI/Routing/ModelRouter.swift`: Removed default arguments from `route()`. Enforced sensitivity ceiling and evaluated destination-specific consent. Added T024 private-only guard.
-   - `PersonalAssistant.swiftpm/AI/Routing/AssistantOrchestrator.swift`: Replaced `try?` on preferences; fails closed emitting `TurnUIEvent.failed` with 0 external network requests on error.
-   - `PersonalAssistant.swiftpm/Voice/LegacySpeechRecognizer.swift`: Enforced `requiresOnDeviceRecognition = true` in private-only mode; fails closed if offline recognition unsupported.
-   - `PersonalAssistant.swiftpm/Tools/OpenURLTool.swift`: Aligned `riskLevel: .high`.
-   - `PersonalAssistant.swiftpm/App/AppSession.swift`: Propagated preference corruption errors to surface `storeRecoveryRequired = true`.
+   - `PersonalAssistant.swiftpm/Persistence/StoreModels.swift`: Added `@Attribute(.unique) var operationKey: String` to `StoredToolReceipt`.
+   - `PersonalAssistant.swiftpm/Domain/ApprovalRequest.swift`: Allowed mutating `externalReference` and `redactedResult` for status updates.
+   - `PersonalAssistant.swiftpm/Tools/ToolReceiptStore.swift`: Implemented `#if canImport(SwiftData)` portability seam, pre-checking duplicate `operationKey`, throwing `updateStatus`, test fault injection hooks (`setRecordPreparedHook`, `setUpdateStatusHook`), and `reconcileStartup()`.
+   - `PersonalAssistant.swiftpm/Tools/ToolInvocationCoordinator.swift`: Scoped idempotency key to owner: `"\(ownerID):\(toolID):\(invocationID)"`. Ensured if `updateStatus` fails after executor finishes, receipt transitions to `.ambiguous` and throws `AppError.sideEffectAmbiguous(operationKey:)`. Throws `sideEffectAmbiguous` on task cancellation.
+   - Extended portable sync scripts (`sync_portable_sources.py` & `swift-portable-tests.sh`) to sync 11 production files.
 3. **Green Phase Verified:**
-   - `swift test --package-path docs/implementation/release_repair_v2/portable_core_tests`: 14/14 tests pass, 0 failures, 0 warnings.
-   - `scripts/swift-prepush.sh .`: 187 files syntax check PASS, 14/14 portable tests PASS.
+   - `swift test --package-path docs/implementation/release_repair_v2/portable_core_tests`: 21/21 tests pass, 0 failures, 0 warnings.
+   - `scripts/swift-prepush.sh .`: 187 files syntax check PASS, 21/21 portable tests PASS.
    - `docs/spec/v3/20_VALIDATE_HANDOFF.py`: 16/16 PASS.
    - `scratch/verify_matrix.py`: 46/46 PASS.
-   - `scratch/test_chat_slice.py`: 4/4 PASS.
    - Kit integrity: 71/71 SHA-256 PASS.
 
-- **Next Action:** Commit Gate G1 changes, push to `feature/v2-overnight-20260927`, open draft PR, monitor CI run to terminal status, advance to Gate G2 (P01-B Durable Receipts).
+- **Next Action:** Commit Gate G2 changes, push to `feature/v2-overnight-20260927`, monitor CI run to terminal status, advance to Gate G3 (P01-C Owner & Session Token Guarding).

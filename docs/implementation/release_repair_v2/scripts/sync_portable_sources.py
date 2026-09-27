@@ -19,6 +19,9 @@ FILES = [
     'Domain/PrivacyAndConsent.swift',
     'Domain/ProviderConfiguration.swift',
     'Security/PrivacyPolicyEngine.swift',
+    'Domain/ApprovalRequest.swift',
+    'Tools/ToolReceiptStore.swift',
+    'Tools/ToolInvocationCoordinator.swift',
 ]
 
 def main():

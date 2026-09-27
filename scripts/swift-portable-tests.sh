@@ -22,6 +22,9 @@ FILES=(
     'Domain/PrivacyAndConsent.swift'
     'Domain/ProviderConfiguration.swift'
     'Security/PrivacyPolicyEngine.swift'
+    'Domain/ApprovalRequest.swift'
+    'Tools/ToolReceiptStore.swift'
+    'Tools/ToolInvocationCoordinator.swift'
 )
 for file in "${FILES[@]}"; do
     [[ -f "$SOURCE/$file" ]] || { printf 'ERROR: Missing original source: %s\n' "$file" >&2; exit 4; }

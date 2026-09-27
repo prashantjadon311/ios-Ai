@@ -424,7 +424,7 @@ final class StoredAttachment {
 final class StoredToolReceipt {
     @Attribute(.unique) var id: UUID
     var invocationID: UUID
-    var operationKey: String
+    @Attribute(.unique) var operationKey: String
     var statusRaw: String
     var toolID: String
     var ownerID: UUID

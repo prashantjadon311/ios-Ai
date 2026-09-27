@@ -138,8 +138,8 @@ struct ToolReceipt: Identifiable, Codable, Sendable, Hashable {
     let toolID: String
     let ownerID: UserID
     let traceID: TraceID
-    let externalReference: String?
-    let redactedResult: String?
+    var externalReference: String?
+    var redactedResult: String?
     let createdAt: Date
     var updatedAt: Date
 
