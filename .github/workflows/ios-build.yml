@@ -2,7 +2,7 @@ name: iOS Build & Verify
 
 on:
   push:
-    branches: [ main, 'repair/**' ]
+    branches: [ main, 'repair/**', 'feature/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:

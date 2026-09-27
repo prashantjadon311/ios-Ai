@@ -71,6 +71,8 @@ actor ConfigurationRepository {
 
     // MARK: - App preferences
 
+    // MARK: - App preferences
+
     func preferences(ownerID: UserID) async throws -> AppPreference {
         let ownerUUID = ownerID.rawValue
         let stored = try await MainActor.run {
@@ -82,17 +84,41 @@ actor ConfigurationRepository {
         guard let stored else {
             return AppPreference(ownerID: ownerID)
         }
-        let mode = PrivacyMode(rawValue: stored.privacyModeRaw) ?? .cloudAllowed
+        guard let mode = PrivacyMode(rawValue: stored.privacyModeRaw) else {
+            throw AppError.storageRecoveryRequired(
+                reason: "Corrupted privacyMode in storage: '\(stored.privacyModeRaw)' for owner \(ownerID.rawValue)"
+            )
+        }
         let appearance = AppearanceMode(rawValue: stored.appearanceModeRaw) ?? .system
         var prefs = AppPreference(ownerID: ownerID, activeAssistantID: stored.activeAssistantIDRaw.map { AssistantID(rawValue: $0) })
         prefs.privacyMode = mode
         prefs.appearanceMode = appearance
         prefs.localeIdentifier = stored.localeIdentifier
         prefs.updatedAt = stored.updatedAt
-        if let records = try? JSONDecoder().decode([ConsentRecord].self, from: stored.consentsData) {
-            var consentMap: [DataEgressDestination: ConsentRecord] = [:]
+        if !stored.consentsData.isEmpty {
+            let records: [ConsentRecord]
+            do {
+                records = try JSONDecoder().decode([ConsentRecord].self, from: stored.consentsData)
+            } catch {
+                throw AppError.storageRecoveryRequired(
+                    reason: "Corrupted consent JSON in store for owner \(ownerID.rawValue): \(error.localizedDescription)"
+                )
+            }
+
+            var consentMap: [String: ConsentRecord] = [:]
             for record in records {
-                consentMap[record.destination] = record
+                let key = record.scopeKey
+                if consentMap[key] != nil {
+                    throw AppError.storageRecoveryRequired(
+                        reason: "Corrupted store: duplicate consent record detected for scope '\(key)'"
+                    )
+                }
+                if record.isGranted && record.grantedAt == nil {
+                    throw AppError.storageRecoveryRequired(
+                        reason: "Corrupted store: granted consent missing grantedAt timestamp for '\(key)'"
+                    )
+                }
+                consentMap[key] = record
             }
             prefs.consents = consentMap
         }
@@ -101,7 +127,12 @@ actor ConfigurationRepository {
 
     func savePreferences(_ prefs: AppPreference) async throws {
         let ownerUUID = prefs.ownerID.rawValue
-        let consentsData = (try? JSONEncoder().encode(Array(prefs.consents.values))) ?? Data()
+        let consentsData: Data
+        do {
+            consentsData = try JSONEncoder().encode(Array(prefs.consents.values))
+        } catch {
+            throw AppError.validationFailed(field: "consents", reason: "Failed to encode consent records: \(error.localizedDescription)")
+        }
         try await MainActor.run {
             let descriptor = FetchDescriptor<StoredAppPreference>(
                 predicate: #Predicate { $0.ownerID == ownerUUID }
@@ -127,6 +158,40 @@ actor ConfigurationRepository {
             }
             try context.save()
         }
+    }
+
+    // MARK: - Atomic consent APIs
+
+    func grantConsent(
+        ownerID: UserID,
+        destination: DataEgressDestination,
+        maximumDataClass: PrivacyClass,
+        providerConfigID: ProviderConfigID? = nil,
+        endpointOrigin: String? = nil
+    ) async throws {
+        var prefs = try await preferences(ownerID: ownerID)
+        prefs.grantConsent(
+            destination: destination,
+            maximumDataClass: maximumDataClass,
+            providerConfigID: providerConfigID,
+            endpointOrigin: endpointOrigin
+        )
+        try await savePreferences(prefs)
+    }
+
+    func revokeConsent(
+        ownerID: UserID,
+        destination: DataEgressDestination,
+        providerConfigID: ProviderConfigID? = nil,
+        endpointOrigin: String? = nil
+    ) async throws {
+        var prefs = try await preferences(ownerID: ownerID)
+        prefs.revokeConsent(
+            destination: destination,
+            providerConfigID: providerConfigID,
+            endpointOrigin: endpointOrigin
+        )
+        try await savePreferences(prefs)
     }
 
     // MARK: - Provider configurations

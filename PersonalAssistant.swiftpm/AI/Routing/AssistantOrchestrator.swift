@@ -39,13 +39,28 @@ actor AssistantOrchestrator {
 
         do {
             let configs = try await configurationRepository.providerConfigs(ownerID: ownerID)
-            let prefs = try? await configurationRepository.preferences(ownerID: ownerID)
-            let privacyMode = prefs?.privacyMode ?? .cloudAllowed
+
+            let prefs: AppPreference
+            do {
+                prefs = try await configurationRepository.preferences(ownerID: ownerID)
+            } catch let appErr as AppError {
+                // Fail-closed: Immediately emit failure and abort; 0 provider calls, 0 HTTP requests
+                await onEvent(.failed(traceID: traceID, error: appErr))
+                return
+            } catch {
+                await onEvent(.failed(traceID: traceID, error: .storageRecoveryRequired(reason: "Preference load failure: \(error.localizedDescription)")))
+                return
+            }
+
+            let maxSensitivity: PrivacyClass = request.messages.map(\.sensitivity).max() ?? .publicData
+
             let routeResult = await router.route(
                 requirements: request.requirements,
                 ownerID: ownerID,
                 configs: configs,
-                privacyMode: privacyMode
+                privacyMode: prefs.privacyMode,
+                consents: prefs.consents,
+                dataClass: maxSensitivity
             )
 
             switch routeResult {

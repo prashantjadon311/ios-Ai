@@ -63,6 +63,42 @@ enum ProviderKind: String, Codable, Sendable, Hashable, CaseIterable {
     case custom            // user-specified OpenAI-compatible endpoint
     case appleFoundation   // COND — gated at runtime
     case managedGateway    // NEXT — not V1
+
+    var egressDestination: DataEgressDestination {
+        switch self {
+        case .groq:
+            return .groqAPI
+        case .openRouter:
+            return .openRouterAPI
+        case .custom:
+            return .customEndpoint
+        case .appleFoundation:
+            return .appleFoundationModel
+        case .managedGateway:
+            return .managedGateway
+        }
+    }
+}
+
+extension ProviderConfiguration {
+    var egressDestination: DataEgressDestination {
+        providerKind.egressDestination
+    }
+
+    var normalizedEndpointOrigin: String? {
+        guard providerKind == .custom,
+              let url = baseURL,
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https",
+              let host = url.host?.lowercased()
+        else {
+            return nil
+        }
+        if let port = url.port {
+            return "\(scheme)://\(host):\(port)"
+        }
+        return "\(scheme)://\(host)"
+    }
 }
 
 // MARK: - Model descriptor

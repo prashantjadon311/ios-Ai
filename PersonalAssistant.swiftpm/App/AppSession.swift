@@ -69,9 +69,15 @@ final class AppSession {
             } else {
                 guard let owner = profiles.first else { return }
                 let assistants = try await configurationRepository.assistantProfiles(ownerID: owner.id)
-                let prefs = (try? await configurationRepository.preferences(ownerID: owner.id))
-                    ?? AppPreference(ownerID: owner.id)
+                let prefs = try await configurationRepository.preferences(ownerID: owner.id)
                 activateProfile(owner, assistants: assistants, prefs: prefs)
+            }
+        } catch let appErr as AppError {
+            if case .storageRecoveryRequired(let reason) = appErr {
+                storeRecoveryRequired = true
+                storeRecoveryReason = reason
+            } else {
+                requiresOnboarding = true
             }
         } catch {
             requiresOnboarding = true
@@ -103,10 +109,17 @@ final class AppSession {
         preferences = nil
         currentProfile = nil
         // 3. Load new profile
-        let assistants = try await configurationRepository.assistantProfiles(ownerID: targetProfile.id)
-        let prefs = (try? await configurationRepository.preferences(ownerID: targetProfile.id))
-            ?? AppPreference(ownerID: targetProfile.id)
-        activateProfile(targetProfile, assistants: assistants, prefs: prefs)
+        do {
+            let assistants = try await configurationRepository.assistantProfiles(ownerID: targetProfile.id)
+            let prefs = try await configurationRepository.preferences(ownerID: targetProfile.id)
+            activateProfile(targetProfile, assistants: assistants, prefs: prefs)
+        } catch let appErr as AppError {
+            if case .storageRecoveryRequired(let reason) = appErr {
+                storeRecoveryRequired = true
+                storeRecoveryReason = reason
+            }
+            throw appErr
+        }
     }
 
     // MARK: - Session capture

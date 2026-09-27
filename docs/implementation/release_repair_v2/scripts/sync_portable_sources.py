@@ -15,6 +15,10 @@ FILES = [
     'Domain/TaskDefinition.swift',
     'AI/Transport/SSEDecoder.swift',
     'Tasks/TaskRecurrence.swift',
+    'Domain/Errors.swift',
+    'Domain/PrivacyAndConsent.swift',
+    'Domain/ProviderConfiguration.swift',
+    'Security/PrivacyPolicyEngine.swift',
 ]
 
 def main():

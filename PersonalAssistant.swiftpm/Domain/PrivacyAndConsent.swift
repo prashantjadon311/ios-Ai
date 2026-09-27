@@ -38,19 +38,52 @@ enum DataEgressDestination: String, Codable, Sendable, Hashable, CaseIterable {
 /// Tracks explicit per-channel opt-in consent (A10 per-channel consent).
 struct ConsentRecord: Codable, Sendable, Hashable {
     let destination: DataEgressDestination
+    var providerConfigID: ProviderConfigID?
+    var endpointOrigin: String? // Normalized HTTPS origin: "https://host:port"
     let maximumDataClass: PrivacyClass
     var isGranted: Bool
     var grantedAt: Date?
     var revokedAt: Date?
 
+    var scopeKey: String {
+        ConsentRecord.computeScopeKey(
+            destination: destination,
+            providerConfigID: providerConfigID,
+            endpointOrigin: endpointOrigin
+        )
+    }
+
+    static func computeScopeKey(
+        destination: DataEgressDestination,
+        providerConfigID: ProviderConfigID? = nil,
+        endpointOrigin: String? = nil
+    ) -> String {
+        var key = destination.rawValue
+        if let configID = providerConfigID {
+            key += ":\(configID.rawValue.uuidString)"
+        }
+        if let origin = endpointOrigin {
+            key += ":\(origin)"
+        }
+        return key
+    }
+
     init(
         destination: DataEgressDestination,
+        providerConfigID: ProviderConfigID? = nil,
+        endpointOrigin: String? = nil,
         maximumDataClass: PrivacyClass,
-        isGranted: Bool = false
+        isGranted: Bool = false,
+        grantedAt: Date? = nil,
+        revokedAt: Date? = nil
     ) {
         self.destination = destination
+        self.providerConfigID = providerConfigID
+        self.endpointOrigin = endpointOrigin
         self.maximumDataClass = maximumDataClass
         self.isGranted = isGranted
+        self.grantedAt = grantedAt
+        self.revokedAt = revokedAt
     }
 }
 
@@ -60,7 +93,7 @@ struct ConsentRecord: Codable, Sendable, Hashable {
 struct AppPreference: Codable, Sendable, Hashable {
     let ownerID: UserID
     var privacyMode: PrivacyMode
-    var consents: [DataEgressDestination: ConsentRecord]
+    var consents: [String: ConsentRecord] // Keyed by stable scopeKey
     var activeAssistantID: AssistantID?
     var appearanceMode: AppearanceMode
     var localeIdentifier: String?
@@ -70,7 +103,7 @@ struct AppPreference: Codable, Sendable, Hashable {
 
     init(ownerID: UserID, activeAssistantID: AssistantID? = nil) {
         self.ownerID = ownerID
-        self.privacyMode = .cloudAllowed
+        self.privacyMode = .privateOnly // Fail-closed: ZERO external transfer until explicit user opt-in
         self.consents = [:]
         self.activeAssistantID = activeAssistantID
         self.appearanceMode = .system
@@ -78,6 +111,58 @@ struct AppPreference: Codable, Sendable, Hashable {
         self.reduceMotion = false
         self.largeText = false
         self.updatedAt = Date()
+    }
+
+    func consent(
+        for destination: DataEgressDestination,
+        providerConfigID: ProviderConfigID? = nil,
+        endpointOrigin: String? = nil
+    ) -> ConsentRecord? {
+        let key = ConsentRecord.computeScopeKey(
+            destination: destination,
+            providerConfigID: providerConfigID,
+            endpointOrigin: endpointOrigin
+        )
+        return consents[key]
+    }
+
+    mutating func grantConsent(
+        destination: DataEgressDestination,
+        maximumDataClass: PrivacyClass,
+        providerConfigID: ProviderConfigID? = nil,
+        endpointOrigin: String? = nil,
+        at date: Date = Date()
+    ) {
+        let record = ConsentRecord(
+            destination: destination,
+            providerConfigID: providerConfigID,
+            endpointOrigin: endpointOrigin,
+            maximumDataClass: maximumDataClass,
+            isGranted: true,
+            grantedAt: date,
+            revokedAt: nil
+        )
+        consents[record.scopeKey] = record
+        updatedAt = date
+    }
+
+    mutating func revokeConsent(
+        destination: DataEgressDestination,
+        providerConfigID: ProviderConfigID? = nil,
+        endpointOrigin: String? = nil,
+        at date: Date = Date()
+    ) {
+        let key = ConsentRecord.computeScopeKey(
+            destination: destination,
+            providerConfigID: providerConfigID,
+            endpointOrigin: endpointOrigin
+        )
+        if var existing = consents[key] {
+            existing.isGranted = false
+            existing.revokedAt = date
+            consents[key] = existing
+            updatedAt = date
+        }
     }
 }
 

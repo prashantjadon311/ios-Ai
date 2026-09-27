@@ -11,7 +11,7 @@ struct OpenURLTool: Sendable {
         name: "Open URL",
         description: "Opens an approved HTTPS URL in the default browser with user consent",
         parameterSchema: Data("{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}".utf8),
-        riskLevel: .medium,
+        riskLevel: .high,
         requiresApproval: true
     )
 

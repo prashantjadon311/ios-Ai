@@ -40,11 +40,23 @@ actor ModelRouter {
         requirements: CapabilityRequirements,
         ownerID: UserID,
         configs: [ProviderConfiguration],
-        privacyMode: PrivacyMode = .cloudAllowed
+        privacyMode: PrivacyMode,
+        consents: [String: ConsentRecord],
+        dataClass: PrivacyClass
     ) async -> RoutingResult {
-        // Enforce Private Only constraint (T024)
+        // 1. Enforce requirement privacy ceiling:
+        if dataClass > requirements.allowedPrivacy {
+            return .noneEligible(
+                reason: "Turn sensitivity '\(dataClass)' exceeds allowedPrivacy requirement '\(requirements.allowedPrivacy)'"
+            )
+        }
+
+        // 2. Enforce Private Only constraint (T024)
         if privacyMode == .privateOnly {
-            return .noneEligible(reason: "External model routing is disabled in Private Only mode. Switch to Cloud Allowed to use cloud providers.")
+            let hasLocalCandidate = configs.contains { $0.ownerID == ownerID && $0.isEnabled && $0.providerKind == .appleFoundation }
+            if !hasLocalCandidate {
+                return .noneEligible(reason: "External model routing is disabled in Private Only mode. Switch to Cloud Allowed to use cloud providers.")
+            }
         }
 
         var eligible: [(config: ProviderConfiguration, provider: any AssistantModel, modelID: String)] = []
@@ -54,6 +66,30 @@ actor ModelRouter {
             guard let raw = config.modelOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !raw.isEmpty, raw != "default" else { continue }
             let selectedModelID = raw
+
+            let destination = config.egressDestination
+            let effectiveConsent: ConsentRecord?
+            if config.providerKind == .custom {
+                effectiveConsent = consents[ConsentRecord.computeScopeKey(
+                    destination: .customEndpoint,
+                    providerConfigID: config.id,
+                    endpointOrigin: config.normalizedEndpointOrigin
+                )]
+            } else {
+                effectiveConsent = consents[destination.rawValue]
+            }
+
+            // Full privacy and consent check:
+            do {
+                try PrivacyPolicyEngine.checkEgressAllowed(
+                    destination: destination,
+                    privacyMode: privacyMode,
+                    dataClass: dataClass,
+                    consent: effectiveConsent
+                )
+            } catch {
+                continue // Egress blocked by privacy mode, ceiling, or missing/revoked consent
+            }
 
             // Lookup by providerKind rawValue (e.g. "groq", "openRouter") or config ID
             guard let provider = providers[config.providerKind.rawValue] ?? providers[config.id.rawValue.uuidString] else {
@@ -88,7 +124,7 @@ actor ModelRouter {
         }
 
         guard let first = eligible.first else {
-            return .noneEligible(reason: "No eligible provider with valid credentials found matching capabilities")
+            return .noneEligible(reason: "No eligible provider matching capabilities, health, and privacy consent found")
         }
 
         return .selected(provider: first.provider, modelID: first.modelID)
