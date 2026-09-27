@@ -30,7 +30,7 @@ struct HTTPResponse: Sendable {
 
 // MARK: - HTTP Client errors
 
-enum HTTPClientError: Error, Sendable {
+enum HTTPClientError: Error, Sendable, Equatable {
     case redirectToUnapprovedHost(String)
     case nonHTTPS(scheme: String?)
     case responseTooLarge(bytes: Int, limit: Int)
@@ -38,6 +38,7 @@ enum HTTPClientError: Error, Sendable {
     case timeout
     case networkError(String)
     case invalidResponse
+    case httpStatus(code: Int, message: String?)
 }
 
 final class RejectCredentialRedirects: NSObject, URLSessionTaskDelegate, Sendable {
@@ -136,9 +137,12 @@ actor HTTPClient {
                     for (k, v) in request.headers { urlRequest.setValue(v, forHTTPHeaderField: k) }
 
                     let (asyncBytes, response) = try await session.bytes(for: urlRequest, delegate: redirectDelegate)
-                    guard let httpResponse = response as? HTTPURLResponse,
-                          (200..<300).contains(httpResponse.statusCode) else {
+                    guard let httpResponse = response as? HTTPURLResponse else {
                         continuation.finish(throwing: HTTPClientError.invalidResponse)
+                        return
+                    }
+                    guard (200..<300).contains(httpResponse.statusCode) else {
+                        continuation.finish(throwing: HTTPClientError.httpStatus(code: httpResponse.statusCode, message: "HTTP \(httpResponse.statusCode)"))
                         return
                     }
 

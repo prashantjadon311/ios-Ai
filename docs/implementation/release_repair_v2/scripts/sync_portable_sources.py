@@ -32,6 +32,10 @@ FILES = [
     'Tasks/ApplicationActionCoordinator.swift',
     'Integrations/ShortcutsBridge.swift',
     'AI/Transport/StreamingDeltaCoalescer.swift',
+    'Domain/Message.swift',
+    'Domain/AIModelDescriptor.swift',
+    'AI/Transport/ModelCatalogClient.swift',
+    'AI/Providers/AppleFoundationModelProvider.swift',
 ]
 
 def main():

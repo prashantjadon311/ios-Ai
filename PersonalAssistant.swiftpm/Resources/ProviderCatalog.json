@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-09-26T00:00:00Z",
+  "updatedAt": "2026-09-28T00:00:00Z",
   "providers": [
     {
       "id": "groq",
@@ -31,6 +31,72 @@
           "name": "Meta Llama 3.3 70B Instruct",
           "contextLength": 131072,
           "supportsTools": true,
+          "supportsVision": false
+        }
+      ]
+    },
+    {
+      "id": "openAI",
+      "name": "OpenAI",
+      "models": [
+        {
+          "id": "gpt-4o",
+          "name": "GPT-4o",
+          "contextLength": 128000,
+          "supportsTools": true,
+          "supportsVision": true
+        },
+        {
+          "id": "gpt-4o-mini",
+          "name": "GPT-4o mini",
+          "contextLength": 128000,
+          "supportsTools": true,
+          "supportsVision": true
+        }
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "models": [
+        {
+          "id": "gemini-2.0-flash",
+          "name": "Gemini 2.0 Flash",
+          "contextLength": 1048576,
+          "supportsTools": true,
+          "supportsVision": true
+        },
+        {
+          "id": "gemini-1.5-flash",
+          "name": "Gemini 1.5 Flash",
+          "contextLength": 1048576,
+          "supportsTools": true,
+          "supportsVision": true
+        }
+      ]
+    },
+    {
+      "id": "nvidia",
+      "name": "NVIDIA NIM",
+      "models": [
+        {
+          "id": "meta/llama-3.3-70b-instruct",
+          "name": "Meta Llama 3.3 70B Instruct (NIM)",
+          "contextLength": 131072,
+          "supportsTools": true,
+          "supportsVision": false
+        }
+      ]
+    },
+    {
+      "id": "appleFoundationModels",
+      "name": "Apple Intelligence",
+      "models": [
+        {
+          "id": "apple-intelligence-on-device",
+          "name": "Apple Intelligence (On-Device)",
+          "contextLength": 4096,
+          "supportsTools": false,
           "supportsVision": false
         }
       ]

@@ -1,7 +1,7 @@
 // AI/Routing/ModelRouter.swift
-// Model routing and fallback per V3 §B03.
+// Model routing and fallback per V3 §B03 and P08.
 // Freezes traceID before first token; no automatic fallback after first visible output.
-// Enforces capability filtering, privacy mode constraints, health checks, and credentials.
+// Enforces capability filtering, privacy mode constraints, health checks, credentials, and TTL catalog cache.
 
 import Foundation
 import Observation
@@ -20,9 +20,15 @@ actor ModelRouter {
     private var providers: [String: any AssistantModel] = [:]
     private var healthMap: [String: Bool] = [:]
     private let keychainVault: KeychainVault
+    private let catalogClient: ModelCatalogClient?
 
-    init(keychainVault: KeychainVault, initialProviders: [any AssistantModel] = []) {
+    init(
+        keychainVault: KeychainVault,
+        catalogClient: ModelCatalogClient? = nil,
+        initialProviders: [any AssistantModel] = []
+    ) {
         self.keychainVault = keychainVault
+        self.catalogClient = catalogClient
         for provider in initialProviders {
             self.providers[provider.providerID] = provider
         }
@@ -32,7 +38,7 @@ actor ModelRouter {
         providers[provider.providerID] = provider
     }
 
-    // MARK: - Route selection (B03)
+    // MARK: - Route selection (B03 / P08)
 
     /// Selects the best eligible provider for the given requirements.
     /// B03: filter order — capabilities, credentials, availability, privacy, context, health, budget, preferences, config order.
@@ -91,32 +97,57 @@ actor ModelRouter {
                 continue // Egress blocked by privacy mode, ceiling, or missing/revoked consent
             }
 
-            // Lookup by providerKind rawValue (e.g. "groq", "openRouter") or config ID
-            guard let provider = providers[config.providerKind.rawValue] ?? providers[config.id.rawValue.uuidString] else {
+            // Lookup provider: custom configs may be keyed by UUID or "custom"
+            guard let provider = providers[config.providerKind.rawValue] ??
+                                 providers[config.id.rawValue.uuidString] ??
+                                 (config.providerKind == .custom ? providers["custom"] : nil) else {
                 continue
             }
 
-            // Key check
-            let hasKey = await keychainVault.hasSecret(ownerID: ownerID, providerID: config.providerKind.rawValue)
-            guard hasKey else { continue }
+            // Key check (Apple Foundation Models are local and do not require API keys)
+            let requiresKey = (config.providerKind != .appleFoundation)
+            if requiresKey {
+                let hasKey = await keychainVault.hasSecret(ownerID: ownerID, providerID: config.providerKind.rawValue) ||
+                             await keychainVault.hasSecret(ownerID: ownerID, providerID: config.id.rawValue.uuidString)
+                guard hasKey else { continue }
+            }
 
             // Health check
             let isHealthy = healthMap[config.providerKind.rawValue] ?? healthMap[config.id.rawValue.uuidString] ?? true
             guard isHealthy else { continue }
 
-            // Capability check using provider.models() if available
-            if let availableModels = try? await provider.models() {
+            // Capability check using cached catalog first (warm voice turns: zero HTTP requests!)
+            var availableModels: [ModelDescriptor]? = nil
+            if let client = catalogClient {
+                availableModels = await client.cachedModels(providerID: config.providerKind.rawValue)
+                if availableModels == nil {
+                    // Try fetch via catalogClient (which caches result)
+                    availableModels = try? await client.fetchModels(provider: provider)
+                }
+            }
+            if availableModels == nil {
+                availableModels = try? await provider.models()
+            }
+
+            if let availableModels {
                 if let descriptor = availableModels.first(where: { $0.id == selectedModelID }) {
+                    // If model is explicitly marked unavailable (e.g. Apple Foundation models on unsupported device)
+                    if descriptor.available == false {
+                        continue
+                    }
                     if requirements.needsVision && descriptor.capabilities.vision != .yes {
                         continue
                     }
                     if requirements.needsTools && descriptor.capabilities.tools != .yes {
                         continue
                     }
-                } else if requirements.needsVision || requirements.needsTools {
+                    if requirements.needsJSON && descriptor.capabilities.jsonMode == .no {
+                        continue
+                    }
+                } else if requirements.needsVision || requirements.needsTools || requirements.needsJSON {
                     continue
                 }
-            } else if requirements.needsVision || requirements.needsTools {
+            } else if requirements.needsVision || requirements.needsTools || requirements.needsJSON {
                 continue
             }
 
@@ -136,4 +167,3 @@ actor ModelRouter {
         healthMap[providerID] = isHealthy
     }
 }
-

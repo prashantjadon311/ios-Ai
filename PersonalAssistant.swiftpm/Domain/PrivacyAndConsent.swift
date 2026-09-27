@@ -31,6 +31,9 @@ enum DataEgressDestination: String, Codable, Sendable, Hashable, CaseIterable {
     case appleSTT              // COND — requires separate consent
     case externalURL           // user-initiated browser open
     case system                // local OS APIs only
+    case openAIAPI
+    case geminiAPI
+    case nvidiaAPI
 }
 
 // MARK: - Consent record

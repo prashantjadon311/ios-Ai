@@ -35,6 +35,10 @@ FILES=(
     'Tasks/ApplicationActionCoordinator.swift'
     'Integrations/ShortcutsBridge.swift'
     'AI/Transport/StreamingDeltaCoalescer.swift'
+    'Domain/Message.swift'
+    'Domain/AIModelDescriptor.swift'
+    'AI/Transport/ModelCatalogClient.swift'
+    'AI/Providers/AppleFoundationModelProvider.swift'
 )
 for file in "${FILES[@]}"; do
     [[ -f "$SOURCE/$file" ]] || { printf 'ERROR: Missing original source: %s\n' "$file" >&2; exit 4; }

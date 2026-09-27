@@ -214,7 +214,13 @@ actor AssistantOrchestrator {
                         )
                         await onEvent(.interrupted(traceID: traceID, reason: error.localizedDescription))
                     } else {
-                        await onEvent(.failed(traceID: traceID, error: .unknown(underlying: error.localizedDescription)))
+                        if let failure = error as? ProviderFailure {
+                            await onEvent(.failed(traceID: traceID, error: .providerTransient(providerID: failure.providerID, statusCode: failure.statusCode)))
+                        } else if let appErr = error as? AppError {
+                            await onEvent(.failed(traceID: traceID, error: appErr))
+                        } else {
+                            await onEvent(.failed(traceID: traceID, error: .unknown(underlying: error.localizedDescription)))
+                        }
                     }
                 }
             }
