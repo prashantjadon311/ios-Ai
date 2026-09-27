@@ -59,7 +59,7 @@ final class ApplicationCommandBus {
         case .createTask:
             router.openTaskEditor(taskID: nil)
         case .createReminder(let title, let fireDate, let timezone):
-            guard let token = session.currentSessionToken else { return }
+            guard let token = session.sessionToken else { return }
             let action = ValidatedAction(
                 ownerID: token.userID,
                 sessionGeneration: token.generation,
@@ -71,7 +71,7 @@ final class ApplicationCommandBus {
                 _ = try? await actionCoordinator?.execute(action, in: token)
             }
         case .executeAction(let action):
-            guard let token = session.currentSessionToken else { return }
+            guard let token = session.sessionToken else { return }
             Task {
                 _ = try? await actionCoordinator?.execute(action, in: token)
             }
