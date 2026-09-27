@@ -1,4 +1,4 @@
-# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G3: PHASE P01-C IN PROGRESS / PRE-PUSH)
+# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G3: PHASE P01-C COMPLETE)
 
 - **Active Checkpoint File:** `docs/implementation/v7/CURRENT_CHECKPOINT.md` (mutable, active execution authority)
 - **Kit Reference Checkpoint:** `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/evidence/CURRENT_CHECKPOINT.md` (immutable, pinned to kit manifest)
@@ -53,5 +53,11 @@
    - `docs/spec/v3/20_VALIDATE_HANDOFF.py`: 16/16 PASS.
    - `scratch/verify_matrix.py`: 46/46 PASS.
    - Kit integrity: 71/71 SHA-256 PASS.
+3. **Remote CI Verified:**
+   - Committed as `2f3b7fc` and `e1d685f` (actor isolation fix for `ChatViewModel.cancel()`), pushed to PR #2.
+   - Remote GitHub Actions CI Results for `e1d685f`:
+     - `ios-real-compiler-probe` (Run ID `36342532881` / PR Run ID `36342535171`): SUCCESS (Apple iOS App Build: 1m27s / 3m4s, Catalyst: 1m13s / 1m27s, Portable Core: 41s / 35s, Static: 5s / 6s)
+     - `iOS Build & Verify` (Run ID `36342532885` / PR Run ID `36342535302`): SUCCESS (Xcode iOS Build Verification: 1m35s / 1m9s, Static: 6s / 6s)
+     - PR checks: 12/12 successful.
 
-- **Next Action:** Commit Gate G3, push to `feature/v2-overnight-20260927`, observe remote CI runs to terminal success, then advance to Gate G4 (Phase P01-D: Keychain Scoping & Rollover).
+- **Next Action:** Advance to Gate G4 (Phase P01-D: Keychain Scoping & Rollover).
