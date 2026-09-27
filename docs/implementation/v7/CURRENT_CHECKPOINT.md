@@ -1,4 +1,4 @@
-# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G4: PHASE P01-D IN PROGRESS / PRE-PUSH)
+# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G4: PHASE P01-D COMPLETE)
 
 - **Active Checkpoint File:** `docs/implementation/v7/CURRENT_CHECKPOINT.md` (mutable, active execution authority)
 - **Kit Reference Checkpoint:** `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/evidence/CURRENT_CHECKPOINT.md` (immutable, pinned to kit manifest)
@@ -47,7 +47,7 @@
 
 ### Gate G4 (P01-D) TDD Red-Green-Refactor Evidence:
 1. **Invariants Enforced:**
-   - **Atomic Mutation via `SecItemUpdate`:** `KeychainVault.setSecret` attempts `SecItemUpdate` first. If update fails (e.g. device locked or OS error), existing secrets are never deleted. If item does not exist (`errSecItemNotFound`), `SecItemAdd` is executed.
+   - **Atomic Mutation via `SecItemUpdate`:** `KeychainVault.setSecret` attempts `SecItemUpdate` first. If update fails (device locked or OS error), existing secrets are never deleted. If item does not exist (`errSecItemNotFound`), `SecItemAdd` is executed.
    - **Safe Rotation:** `KeychainVault.rotateSecret` uses `SecItemUpdate` and preserves existing secret on any failure (throws `VaultError.writeFailed`, `VaultError.locked`, or `VaultError.notFound`).
    - **Dynamic Credential Registry:** Dynamic credentials (including custom endpoint API keys) are tracked in a persistent registry per owner; `KeychainVault.removeAll(ownerID:)` wipes all registered credentials and built-in provider credentials, leaving zero orphan secrets.
    - **Locked Vault Handling:** Throws typed `VaultError.locked` upon `errSecInteractionNotAllowed`.
@@ -59,5 +59,11 @@
    - `docs/spec/v3/20_VALIDATE_HANDOFF.py`: 16/16 PASS.
    - `scratch/verify_matrix.py`: 46/46 PASS.
    - Kit integrity: 71/71 SHA-256 PASS.
+3. **Remote CI Verified:**
+   - Committed as `0e476b1e68db0b712be6bdbf51a28590f3e48e41`, pushed to PR #2.
+   - Remote GitHub Actions CI Results for `0e476b1`:
+     - `ios-real-compiler-probe` (Run ID `36343174530` / PR Run ID `36343178179`): SUCCESS (Apple iOS App Build: 1m36s / 1m12s, Catalyst: 1m13s / 57s, Portable Core: 56s / 59s, Static: 7s / 6s)
+     - `iOS Build & Verify` (Run ID `36343174559` / PR Run ID `36343178209`): SUCCESS (Xcode iOS Build Verification: 1m54s / 1m24s, Static: 5s / 6s)
+     - PR checks: 12/12 successful.
 
-- **Next Action:** Commit Gate G4, push to `feature/v2-overnight-20260927`, observe remote CI runs to terminal success, then advance to Gate G5 (Phase P02-A: Multi-turn Tool Receipt Durability).
+- **Next Action:** Advance to Gate G5 (Phase P02-A: Multi-turn Tool Receipt Durability).

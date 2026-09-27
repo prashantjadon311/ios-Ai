@@ -2,8 +2,8 @@
 
 **Branch:** `feature/v2-overnight-20260927`  
 **Base Commit:** `6d50333ebf401234c609c61b9f33cbe27728b1aa` (origin/main)  
-**Timestamp:** 2026-09-28T00:37:00+05:30
-**Current Gate:** Gate G4 (Phase P01-D) Local Verification Complete / Remote CI Pending
+**Timestamp:** 2026-09-28T00:41:00+05:30
+**Current Gate:** Gate G4 (Phase P01-D) Completed & CI Green
 
 ---
 
@@ -15,7 +15,7 @@
 | **G1** | P01-A: Fail-Closed Privacy & Destination-Specific Consent | 10 compile failures witnessed on unmodified domain types | 14/14 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G2** | P01-B: Durable Receipts & Idempotency Key | 7 tests failed/missing on unmodified coordinator/store | 21/21 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G3** | P01-C: Owner & Session Token Guarding | Red tests demonstrated missing session barriers in coordinator/guard | 32/32 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
-| **G4** | P01-D: Keychain Scoping & Rollover | Destructive delete-then-add in setSecret/rotateSecret and missing dynamic registry | 41/41 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI Pending | **IN_VERIFICATION** |
+| **G4** | P01-D: Keychain Scoping & Rollover | Destructive delete-then-add in setSecret/rotateSecret and missing dynamic registry | 41/41 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G5** | P02-A: Multi-turn Tool Receipt Durability | Pending | Pending | QUEUED |
 | **G6** | P02-B: Real Voice Pipeline & Audio Session Interruption | Pending | Pending | QUEUED |
 | **G7** | P03-A: Store Recovery Diagnostic Surface | Pending | Pending | QUEUED |
@@ -28,8 +28,8 @@
 ## 2. Gate G1 (P01-A) Evidence Summary
 - Remote CI Commit: `d37513b1ec4c628eff56730c776d25d2bd984765`
 - GitHub Actions Runs:
-  - `ios-real-compiler-probe` (Run ID `36339645346`): SUCCESS (Apple iOS App Build: 1m54s, Catalyst: 1m7s, Portable Core: 37s, Static: 6s)
-  - `iOS Build & Verify` (Run ID `36339645365`): SUCCESS (Xcode iOS Build Verification: 1m46s, Static: 7s)
+  - `ios-real-compiler-probe` (Run ID `36339645346`): SUCCESS (4/4 jobs pass, including Apple iOS App Build in 1m54s, Catalyst in 1m7s, Portable Core in 37s, Static Verification in 6s)
+  - `iOS Build & Verify` (Run ID `36339645365`): SUCCESS (2/2 jobs pass, including Xcode iOS Build Verification in 1m46s)
   - PR checks: 12/12 checks passing on Draft PR #2.
 
 ---
@@ -52,7 +52,12 @@
 
 ---
 
-## 5. Gate G4 (P01-D) Evidence Details
+## 5. Gate G4 (P01-D) Evidence Summary
+- Remote CI Commit: `0e476b1e68db0b712be6bdbf51a28590f3e48e41`
+- GitHub Actions Runs:
+  - `ios-real-compiler-probe` (Run ID `36343174530` / PR Run ID `36343178179`): SUCCESS (Apple iOS App Build: 1m36s / 1m12s, Catalyst: 1m13s / 57s, Portable Core: 56s / 59s, Static: 7s / 6s)
+  - `iOS Build & Verify` (Run ID `36343174559` / PR Run ID `36343178209`): SUCCESS (Xcode iOS Build Verification: 1m54s / 1m24s, Static: 5s / 6s)
+  - PR checks: 12/12 checks passing on Draft PR #2.
 
 ### 5.1 Invariants Enforced
 1. **Atomic Mutation via `SecItemUpdate`:**
