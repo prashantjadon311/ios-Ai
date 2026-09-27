@@ -36,6 +36,11 @@ FILES = [
     'Domain/AIModelDescriptor.swift',
     'AI/Transport/ModelCatalogClient.swift',
     'AI/Providers/AppleFoundationModelProvider.swift',
+    'Domain/ProjectDefinition.swift',
+    'Domain/TaskCategory.swift',
+    'Domain/ReminderDefinition.swift',
+    'Tasks/TaskProgress.swift',
+    'Tasks/TaskDateQueries.swift',
 ]
 
 def main():
