@@ -1,4 +1,4 @@
-# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G4: PHASE P01-D COMPLETE)
+# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G5: PHASE P02/P03 COMPLETE)
 
 - **Active Checkpoint File:** `docs/implementation/v7/CURRENT_CHECKPOINT.md` (mutable, active execution authority)
 - **Kit Reference Checkpoint:** `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/evidence/CURRENT_CHECKPOINT.md` (immutable, pinned to kit manifest)
@@ -66,4 +66,26 @@
      - `iOS Build & Verify` (Run ID `36343174559` / PR Run ID `36343178209`): SUCCESS (Xcode iOS Build Verification: 1m54s / 1m24s, Static: 5s / 6s)
      - PR checks: 12/12 successful.
 
-- **Next Action:** Advance to Gate G5 (Phase P02-A: Multi-turn Tool Receipt Durability).
+### Gate G5 (Phase P02 & P03) TDD Red-Green-Refactor Evidence:
+1. **Invariants Enforced:**
+   - **Offline Task/Reminder Vertical Slice:** Created domain contracts (`ActionContracts.swift`) including `ActionSource`, `ActionPayload`, `ValidatedAction`, `ActionStatus`, `NotificationScheduleStatus`, `ActionReceipt`, `VoiceLaunchRequest`, and `TaskRepositoryProtocol`.
+   - **Deterministic Local Intent Parsing:** `LocalIntentParser` with injected clock/calendar/timeZone deterministically parses reminder and task requests offline. Detects ambiguous relative Hindi/Hinglish terms ("kal", "parson") and incomplete times/dates, returning `.needsClarification` instead of guessing.
+   - **Atomic, Idempotent Action Coordination:** `ApplicationActionCoordinator` verifies session token validity and owner isolation, persists durable `PREPARED` receipts via `ToolReceiptStore` before any side effects, persists tasks to `TaskRepositoryProtocol`, and coordinates notification scheduling via `LocalReminderScheduler`. If user has denied notification permissions, it records `.alertNotScheduled` without falsely claiming scheduling.
+   - **Genuine App Shortcuts:** Replaced placeholder `ShortcutsBridge` with genuine `AppIntent` implementations (`TalkToMayaIntent`, `TalkToSaarIntent` with `openAppWhenRun = true`), `AssistantShortcutsProvider` defining user-discoverable voice trigger phrases, and in-app launch request deduplication with a 15-second TTL cache and account-switch cache invalidation.
+   - **Tool Proposal Handoff:** Updated `AssistantOrchestrator` to evaluate tool proposals against `ToolPolicyEngine` and yield `.toolProposalPending` requiring explicit user approval instead of silently dropping proposals.
+   - **Command Bus & Container Wiring:** Wired `reminderScheduler` and `actionCoordinator` in `AppContainer` and added `.createReminder` and `.executeAction` dispatching in `ApplicationCommandBus`.
+2. **Local TDD Evidence:**
+   - Added 23 unit tests across 3 suites: `LocalIntentParserTests` (10 tests), `ActionCoordinatorTests` (7 tests), `VoiceLaunchRequestTests` (6 tests).
+   - Total portable test suite: 64/64 portable tests PASS (executed in 0.039s).
+   - `scripts/swift-prepush.sh .`: 189 Swift files syntax check PASS, 64/64 portable tests PASS.
+   - `docs/spec/v3/20_VALIDATE_HANDOFF.py`: 16/16 PASS.
+   - `scratch/verify_matrix.py`: 46/46 PASS.
+   - Kit integrity: 71/71 SHA-256 PASS.
+3. **Remote CI Verified:**
+   - Commits: `1a66b5b85eb912ce9561383cf57ac0c2a7f44763` -> `45fa26962716126c78b5da889920b25e1605a8db`
+   - Remote GitHub Actions CI Results for `45fa269`:
+     - `ios-real-compiler-probe` (Push Run `36350161957` / PR Run `36350163819`): SUCCESS (Apple iOS App Build: 1m46s, Catalyst: 1m2s, Portable Core: 46s, Static: 4s)
+     - `iOS Build & Verify` (Push Run `36350162017` / PR Run `36350163857`): SUCCESS (Xcode iOS Build Verification: 1m56s, Static: 7s)
+     - PR checks: 12/12 successful on PR #2.
+
+- **Next Action:** Advance to Gate G6 (Phase P04: Approved V5 Adaptive UI + Phase P05: Streaming / Voice / Avatar).

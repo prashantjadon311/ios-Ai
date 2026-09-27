@@ -2,8 +2,8 @@
 
 **Branch:** `feature/v2-overnight-20260927`  
 **Base Commit:** `6d50333ebf401234c609c61b9f33cbe27728b1aa` (origin/main)  
-**Timestamp:** 2026-09-28T00:41:00+05:30
-**Current Gate:** Gate G4 (Phase P01-D) Completed & CI Green
+**Timestamp:** 2026-09-28T02:35:00+05:30
+**Current Gate:** Gate G5 (Phase P02 & P03) Completed & CI Green
 
 ---
 
@@ -16,12 +16,12 @@
 | **G2** | P01-B: Durable Receipts & Idempotency Key | 7 tests failed/missing on unmodified coordinator/store | 21/21 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G3** | P01-C: Owner & Session Token Guarding | Red tests demonstrated missing session barriers in coordinator/guard | 32/32 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
 | **G4** | P01-D: Keychain Scoping & Rollover | Destructive delete-then-add in setSecret/rotateSecret and missing dynamic registry | 41/41 tests pass; 187 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
-| **G5** | P02-A: Multi-turn Tool Receipt Durability | Pending | Pending | QUEUED |
-| **G6** | P02-B: Real Voice Pipeline & Audio Session Interruption | Pending | Pending | QUEUED |
-| **G7** | P03-A: Store Recovery Diagnostic Surface | Pending | Pending | QUEUED |
-| **G8** | P03-B: End-to-End Chat Vertical Slice Verification | Pending | Pending | QUEUED |
-| **G9** | P04: Full Regression & Compliance Sweep | Pending | Pending | QUEUED |
-| **G10** | P05: Final Overnight Report & Draft PR Finalization | Pending | Pending | QUEUED |
+| **G5** | P02/P03: Offline Task/Reminder Slice & Genuine App Shortcuts | Red tests demonstrated missing intent parsing, unvalidated action dispatch, and placeholder shortcuts | 64/64 tests pass; 189 Swift files syntax pass; 46/46 matrix pass; Remote CI 12/12 pass | **PASS** |
+| **G6** | P04/P05: Approved V5 Adaptive UI + Streaming / Voice / Avatar | Pending | Pending | QUEUED |
+| **G7** | P08: Model providers, local-engine capability truth, provider catalog | Pending | Pending | QUEUED |
+| **G8** | P07: Project/progress flow and integration hardening | Pending | Pending | QUEUED |
+| **G9** | P09/P10: Firestore sync & encrypted Drive backup | Pending | Pending | QUEUED |
+| **G10** | P11: Entire-system qualification & final draft PR | Pending | Pending | QUEUED |
 
 ---
 
@@ -94,3 +94,49 @@
   ```
   KIT_ONLY_PASS: verified 71 file SHA256; 14 skills, 12 phase packets, V5 reference ZIP integrity; original app NOT TESTED
   ```
+
+---
+
+## 6. Gate G5 (Phase P02 & P03) Evidence Summary
+- Remote CI Commits: `1a66b5b85eb912ce9561383cf57ac0c2a7f44763` -> `45fa26962716126c78b5da889920b25e1605a8db`
+- GitHub Actions Runs:
+  - `ios-real-compiler-probe` (Push Run ID `36350161957` / PR Run ID `36350163819`): SUCCESS (Apple iOS App Build: 1m46s, Catalyst: 1m2s, Portable Core: 46s, Static: 4s)
+  - `iOS Build & Verify` (Push Run ID `36350162017` / PR Run ID `36350163857`): SUCCESS (Xcode iOS Build Verification: 1m56s, Static: 7s)
+  - PR checks: 12/12 checks passing on Draft PR #2.
+
+### 6.1 Invariants Enforced
+1. **Deterministic Local Intent Parsing:**
+   `LocalIntentParser` deterministically parses reminders and tasks without network dependencies, safely flagging ambiguous relative day markers ("kal", "parson") as `.needsClarification`.
+2. **Atomic Action Execution & Prepared Receipts:**
+   `ApplicationActionCoordinator` verifies session token validity and owner isolation, persists a durable `PREPARED` receipt in `ToolReceiptStore` before any side effect, persists tasks to `TaskRepositoryProtocol`, and coordinates notification scheduling via `LocalReminderScheduler`.
+3. **Honest Notification Permissions:**
+   If notification permission is denied, records `.alertNotScheduled` rather than falsely claiming delivery.
+4. **Genuine App Shortcuts:**
+   Implemented `TalkToMayaIntent`, `TalkToSaarIntent`, `AssistantShortcutsProvider`, and `ShortcutsBridge` with 15s TTL deduplication and account-switch invalidation.
+5. **Tool Proposal Handoff:**
+   `AssistantOrchestrator` validates proposed tools against `ToolPolicyEngine` and yields `.toolProposalPending` requiring explicit user approval.
+
+### 6.2 Verification Command Evidence
+- `swift test --package-path docs/implementation/release_repair_v2/portable_core_tests`:
+  ```
+  Test Suite 'All tests' passed at 2026-09-28 02:08:44.208
+  Executed 64 tests, with 0 failures (0 unexpected) in 0.039 (0.039) seconds
+  ```
+- `scripts/swift-prepush.sh .`:
+  ```
+  PORTABLE_TESTS: PASS (20 Foundation-compatible production files, plus actual tests).
+  ORIGINAL_IOS_BUILD: NOT_RUN here; Xcode/macOS CI or verified remote Mac remains authoritative.
+  ```
+- `docs/spec/v3/20_VALIDATE_HANDOFF.py`:
+  ```
+  STATIC AUDIT: 16/16 PASS
+  ```
+- `scratch/verify_matrix.py`:
+  ```
+  STATIC CONTRACT MATRIX: 46/46 CASES PASS
+  ```
+- `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/scripts/verify-kit.sh`:
+  ```
+  KIT_ONLY_PASS: verified 71 file SHA256; 14 skills, 12 phase packets, V5 reference ZIP integrity; original app NOT TESTED
+  ```
+
