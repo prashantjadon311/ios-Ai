@@ -89,7 +89,7 @@ actor AssistantOrchestrator {
                 var hasEmittedVisibleToken = false
 
                 let coalescer = StreamingDeltaCoalescer(flushThreshold: 128) { delta in
-                    _ = try? await conversationRepository.appendAssistantCheckpoint(
+                    _ = try? await self.conversationRepository.appendAssistantCheckpoint(
                         traceID: traceID,
                         conversationID: conversationID,
                         ownerID: ownerID,
