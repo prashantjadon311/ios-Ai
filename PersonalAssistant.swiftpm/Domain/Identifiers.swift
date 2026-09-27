@@ -55,6 +55,27 @@ struct TaskRunID: RawRepresentable, Hashable, Codable, Sendable, CustomStringCon
     var description: String { "TaskRunID(\(rawValue))" }
 }
 
+struct ProjectID: RawRepresentable, Hashable, Codable, Sendable, CustomStringConvertible {
+    let rawValue: UUID
+    init(rawValue: UUID) { self.rawValue = rawValue }
+    init() { self.rawValue = UUID() }
+    var description: String { "ProjectID(\(rawValue))" }
+}
+
+struct TaskCategoryID: RawRepresentable, Hashable, Codable, Sendable, CustomStringConvertible {
+    let rawValue: UUID
+    init(rawValue: UUID) { self.rawValue = rawValue }
+    init() { self.rawValue = UUID() }
+    var description: String { "TaskCategoryID(\(rawValue))" }
+}
+
+struct ReminderID: RawRepresentable, Hashable, Codable, Sendable, CustomStringConvertible {
+    let rawValue: UUID
+    init(rawValue: UUID) { self.rawValue = rawValue }
+    init() { self.rawValue = UUID() }
+    var description: String { "ReminderID(\(rawValue))" }
+}
+
 struct MemoryItemID: RawRepresentable, Hashable, Codable, Sendable, CustomStringConvertible {
     let rawValue: UUID
     init(rawValue: UUID) { self.rawValue = rawValue }

@@ -19,6 +19,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    TopRightAvatarNavButton()
+                }
+            }
             .task {
                 let vm = container.makeSettingsViewModel()
                 viewModel = vm

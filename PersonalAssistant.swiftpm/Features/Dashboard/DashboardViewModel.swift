@@ -9,6 +9,8 @@ import Observation
 final class DashboardViewModel {
     private(set) var recentConversations: [Conversation] = []
     private(set) var todayTasks: [TaskDefinition] = []
+    private(set) var overdueTasks: [TaskDefinition] = []
+    private(set) var todayReminders: [ReminderDefinition] = []
     private(set) var isLoading: Bool = false
     private(set) var error: AppError?
 
@@ -37,9 +39,16 @@ final class DashboardViewModel {
         error = nil
         defer { isLoading = false }
         do {
-            let convs = try await conversationRepository.conversations(owner: owner.id)
+            async let convsTask = conversationRepository.conversations(owner: owner.id)
+            async let dueTasksTask = taskRepository.dueTodayTasks(ownerID: owner.id, referenceDate: Date(), timeZone: TimeZone.current, limit: 10)
+            async let overdueTasksTask = taskRepository.overdueTasks(ownerID: owner.id, referenceDate: Date(), timeZone: TimeZone.current, limit: 10)
+            async let remindersTask = taskRepository.dueTodayReminders(ownerID: owner.id, referenceDate: Date(), timeZone: TimeZone.current, limit: 10)
+
+            let (convs, due, overdue, reminders) = try await (convsTask, dueTasksTask, overdueTasksTask, remindersTask)
             recentConversations = Array(convs.prefix(5))
-            todayTasks = try await taskRepository.taskDefinitions(ownerID: owner.id)
+            todayTasks = due
+            overdueTasks = overdue
+            todayReminders = reminders
         } catch {
             self.error = .unknown(underlying: error.localizedDescription)
         }

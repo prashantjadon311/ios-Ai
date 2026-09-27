@@ -12,40 +12,48 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: AppTheme.Spacing.lg) {
-                    // Active assistant header
-                    assistantHeader
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: AppTheme.Spacing.lg) {
+                        // Central AI Voice Visual (V5: pearl orb in light, warm amber waveform in dark)
+                        AIVoiceCenterVisual(state: .idle, size: 100)
+                            .padding(.top, AppTheme.Spacing.sm)
 
-                    // Quick ask bar
-                    quickAskBar
+                        // Active assistant header
+                        assistantHeader
 
-                    // Recent conversations
-                    if let vm = viewModel, !vm.recentConversations.isEmpty {
-                        recentConversationsSection(vm)
+                        // Recent conversations
+                        if let vm = viewModel, !vm.recentConversations.isEmpty {
+                            recentConversationsSection(vm)
+                        }
+
+                        // Today's tasks
+                        if let vm = viewModel, !vm.todayTasks.isEmpty {
+                            todayTasksSection(vm)
+                        }
+
+                        // Empty state when no content
+                        if let vm = viewModel, vm.recentConversations.isEmpty && vm.todayTasks.isEmpty && !vm.isLoading {
+                            emptyState
+                        }
                     }
-
-                    // Today's tasks
-                    if let vm = viewModel, !vm.todayTasks.isEmpty {
-                        todayTasksSection(vm)
-                    }
-
-                    // Empty state when no content
-                    if let vm = viewModel, vm.recentConversations.isEmpty && vm.todayTasks.isEmpty && !vm.isLoading {
-                        emptyState
-                    }
+                    .padding(AppTheme.Spacing.md)
                 }
-                .padding(AppTheme.Spacing.md)
+
+                Divider()
+                    .overlay(AppTheme.Color.border)
+
+                // Shared bottom composer anchored above safe area (V5)
+                quickAskBar
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                    .padding(.vertical, AppTheme.Spacing.sm)
+                    .background(AppTheme.Color.nav)
             }
+            .background(AppTheme.Color.canvas)
             .navigationTitle("Dashboard")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        router.openAssistantSelector()
-                    } label: {
-                        Label("Switch Assistant", systemImage: "person.2.circle")
-                    }
-                    .accessibilityLabel("Switch assistant")
+                    TopRightAvatarNavButton()
                 }
             }
             .task {

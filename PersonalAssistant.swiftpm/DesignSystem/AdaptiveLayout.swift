@@ -1,7 +1,6 @@
 // DesignSystem/AdaptiveLayout.swift
-// Compact (iPhone TabView) and regular (iPad NavigationSplitView) layout container.
-// Per V3 §DesignSystem/AdaptiveLayout.swift blueprint.
-// Views retrieve dependencies via Environment, matching parameterless view initializers.
+// Unified V5 adaptive layout container (No bottom TabView; one top-right profile drawer).
+// Per V5 design specification and tokens.
 
 import SwiftUI
 
@@ -11,108 +10,109 @@ struct RootNavigationView: View {
     @Environment(AppContainer.self) private var container
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+    @State private var columnVisibility: NavigationSplitViewVisibility = .detailOnly
+
     var body: some View {
         Group {
             if session.isLocked {
                 AppLockView()
             } else if session.requiresOnboarding {
                 OnboardingView()
-            } else if horizontalSizeClass == .compact {
-                compactTabView
             } else {
-                regularSplitView
+                rootContent
             }
         }
+        .preferredColorScheme(session.preferredColorScheme)
         .sheet(item: Bindable(router).presentedSheet) { sheet in
             sheetDestination(for: sheet)
+                .preferredColorScheme(session.preferredColorScheme)
         }
     }
 
-    // MARK: - iPhone Compact TabView
+    @ViewBuilder
+    private var rootContent: some View {
+        ZStack {
+            if horizontalSizeClass == .regular {
+                // iPad V5: Initial sidebar hidden, toggled via drawer or toolbar
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    sidebarList
+                } detail: {
+                    destinationView(for: router.selectedDestination)
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                // iPhone V5: No TabView bottom navigation bar
+                destinationView(for: router.selectedDestination)
+            }
+
+            // Unified right-side profile and navigation drawer
+            ProfileNavigationDrawerView()
+        }
+    }
+
+    // MARK: - iPad Sidebar List (Optional pinned sidebar controlled from inside drawer)
 
     @ViewBuilder
-    private var compactTabView: some View {
-        TabView(selection: Bindable(router).selectedDestination) {
-            DashboardView()
-                .tabItem {
+    private var sidebarList: some View {
+        List(selection: Binding<AppDestination?>(
+            get: { router.selectedDestination },
+            set: { if let destination = $0 { router.selectedDestination = destination } }
+        )) {
+            Section("Assistant") {
+                NavigationLink(value: AppDestination.dashboard) {
                     Label("Dashboard", systemImage: "sparkles")
                 }
-                .tag(AppDestination.dashboard)
-
-            TaskDashboardView()
-                .tabItem {
-                    Label("Tasks", systemImage: "checklist")
+                NavigationLink(value: AppDestination.history) {
+                    Label("Conversations", systemImage: "bubble.left.and.bubble.right")
                 }
-                .tag(AppDestination.tasks)
-
-            HistoryView()
-                .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
+                NavigationLink(value: AppDestination.tasks) {
+                    Label("Tasks & Projects", systemImage: "checklist")
                 }
-                .tag(AppDestination.history)
-
-            ConfigurationView()
-                .tabItem {
-                    Label("Configure", systemImage: "slider.horizontal.3")
+                NavigationLink(value: AppDestination.reminders) {
+                    Label("Reminders", systemImage: "bell")
                 }
-                .tag(AppDestination.configuration)
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .tag(AppDestination.settings)
-        }
-    }
-
-    // MARK: - iPad Regular SplitView
-
-    @ViewBuilder
-    private var regularSplitView: some View {
-        NavigationSplitView {
-            List(selection: Binding<AppDestination?>(
-                get: { router.selectedDestination },
-                set: { if let destination = $0 { router.selectedDestination = destination } }
-            )) {
-                Section("Assistant") {
-                    NavigationLink(value: AppDestination.dashboard) {
-                        Label("Dashboard", systemImage: "sparkles")
-                    }
-                    NavigationLink(value: AppDestination.tasks) {
-                        Label("Tasks", systemImage: "checklist")
-                    }
-                    NavigationLink(value: AppDestination.history) {
-                        Label("History", systemImage: "clock.arrow.circlepath")
-                    }
-                }
-                Section("Preferences") {
-                    NavigationLink(value: AppDestination.configuration) {
-                        Label("Configuration", systemImage: "slider.horizontal.3")
-                    }
-                    NavigationLink(value: AppDestination.settings) {
-                        Label("Settings", systemImage: "gearshape")
-                    }
+                NavigationLink(value: AppDestination.memory) {
+                    Label("Memory", systemImage: "brain")
                 }
             }
-            .listStyle(.sidebar)
-            .navigationTitle("Assistant")
-        } detail: {
-            destinationView(for: router.selectedDestination)
+            Section("Preferences") {
+                NavigationLink(value: AppDestination.assistants) {
+                    Label("Assistants", systemImage: "person.2")
+                }
+                NavigationLink(value: AppDestination.configuration) {
+                    Label("AI Providers", systemImage: "cpu")
+                }
+                NavigationLink(value: AppDestination.settings) {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            }
         }
+        .listStyle(.sidebar)
+        .navigationTitle("Personal Assistant")
     }
+
+    // MARK: - Destination View
 
     @ViewBuilder
     private func destinationView(for destination: AppDestination) -> some View {
         switch destination {
         case .dashboard:
             DashboardView()
-        case .tasks:
-            TaskDashboardView()
         case .history:
             HistoryView()
+        case .tasks:
+            TaskDashboardView()
+        case .reminders:
+            RemindersView()
+        case .memory:
+            MemoryBrowserView()
+        case .assistants:
+            AssistantProfileView()
         case .configuration:
             ConfigurationView()
         case .settings:
+            SettingsView()
+        case .profile:
             SettingsView()
         }
     }

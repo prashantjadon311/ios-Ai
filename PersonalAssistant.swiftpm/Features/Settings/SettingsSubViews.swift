@@ -4,6 +4,8 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @Environment(AppSession.self) private var session
     @State private var appearance: AppearanceMode = .system
+    @State private var isSaving: Bool = false
+    @State private var saveError: String?
 
     var body: some View {
         Form {
@@ -14,7 +16,40 @@ struct AppearanceSettingsView: View {
                     Text("Dark").tag(AppearanceMode.dark)
                 }
                 .pickerStyle(.inline)
+                .onChange(of: appearance) { _, newMode in
+                    Task {
+                        isSaving = true
+                        saveError = nil
+                        do {
+                            try await session.updateAppearanceMode(newMode)
+                        } catch {
+                            saveError = error.localizedDescription
+                        }
+                        isSaving = false
+                    }
+                }
             }
+
+            if isSaving {
+                Section {
+                    HStack {
+                        ProgressView()
+                            .padding(.trailing, 8)
+                        Text("Applying theme…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if let saveError {
+                Section {
+                    Text("Failed to save appearance: \(saveError)")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
             Section("Information") {
                 Text("Adapts typography, contrast, and layout to system Dynamic Type and appearance preferences.")
                     .font(.caption)
@@ -53,18 +88,41 @@ struct DiagnosticsView: View {
 struct StorageSettingsView: View {
     var body: some View {
         Form {
-            Section("Local Storage") {
+            Section("Local Storage (Active)") {
                 LabeledContent("Engine", value: "SwiftData (Local SQLite)")
-                LabeledContent("Cloud Sync", value: "Disabled (Device Only)")
                 LabeledContent("Attachments", value: "Sandboxed Local Storage")
+                LabeledContent("Status", value: "Active (On-Device Only)")
             }
-            Section("Information") {
-                Text("All conversations, memory entries, and scheduled tasks are stored on-device. No external cloud database is used.")
+
+            Section("Optional Cloud Integrations") {
+                LabeledContent("Firestore Sync (P09)") {
+                    Text("BLOCKED_NO_CREDENTIALS")
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundStyle(.orange)
+                        .clipShape(Capsule())
+                }
+
+                LabeledContent("Encrypted Drive Backup (P10)") {
+                    Text("BLOCKED_NO_CREDENTIALS")
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundStyle(.orange)
+                        .clipShape(Capsule())
+                }
+            }
+
+            Section("Integrity & Privacy Guarantee") {
+                Text("Optional cloud sync and encrypted backup require explicit user configuration and live developer credentials. Because no Firebase or Google Drive OAuth credentials are configured, both adapters fail-closed to protect your privacy. All conversations, memory entries, and tasks remain 100% operational on this device.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("Storage")
+        .navigationTitle("Storage & Cloud")
     }
 }
 

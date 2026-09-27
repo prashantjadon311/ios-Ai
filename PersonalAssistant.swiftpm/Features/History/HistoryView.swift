@@ -17,7 +17,12 @@ struct HistoryView: View {
                     ProgressView()
                 }
             }
-            .navigationTitle("History")
+            .navigationTitle("Conversations")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    TopRightAvatarNavButton()
+                }
+            }
             .searchable(text: $searchText, prompt: "Search conversations")
             .onChange(of: searchText) { _, new in viewModel?.onSearch(new) }
             .task {

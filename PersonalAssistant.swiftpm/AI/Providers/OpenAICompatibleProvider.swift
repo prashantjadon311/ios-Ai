@@ -74,6 +74,7 @@ actor OpenAICompatibleProvider: AssistantModel {
     private let httpClient: HTTPClient
     private var modelCache: (models: [ModelDescriptor], cachedAt: Date)?
     private let catalogTTL: TimeInterval
+    private let defaultModelID: String
 
     init(
         providerID: String,
@@ -81,7 +82,8 @@ actor OpenAICompatibleProvider: AssistantModel {
         keychainVault: KeychainVault,
         ownerID: UserID? = nil,
         httpClient: HTTPClient,
-        catalogTTL: TimeInterval = 86400
+        catalogTTL: TimeInterval = 86400,
+        defaultModelID: String? = nil
     ) {
         self.providerID = providerID
         self.baseURL = baseURL
@@ -89,6 +91,17 @@ actor OpenAICompatibleProvider: AssistantModel {
         self.ownerID = ownerID
         self.httpClient = httpClient
         self.catalogTTL = catalogTTL
+        if let defaultModelID {
+            self.defaultModelID = defaultModelID
+        } else if providerID == "groq" {
+            self.defaultModelID = "llama-3.3-70b-versatile"
+        } else if providerID == "openAI" {
+            self.defaultModelID = "gpt-4o-mini"
+        } else if providerID == "nvidia" {
+            self.defaultModelID = "meta/llama-3.3-70b-instruct"
+        } else {
+            self.defaultModelID = "meta-llama/llama-3.3-70b-instruct"
+        }
     }
 
     // MARK: - models()
@@ -147,7 +160,7 @@ actor OpenAICompatibleProvider: AssistantModel {
             return OAIMessage(role: ctx.role.rawValue, content: text)
         }
 
-        let selectedModel = request.modelOverride ?? ((providerID == "groq") ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct")
+        let selectedModel = request.modelOverride ?? self.defaultModelID
 
         let body = OAIChatCompletionRequest(
             model: selectedModel,
@@ -223,7 +236,21 @@ actor OpenAICompatibleProvider: AssistantModel {
                         throw ProviderFailure(providerID: providerID, message: "Stream disconnected unexpectedly before terminal event")
                     }
                 } catch {
-                    continuation.finish(throwing: error)
+                    if let httpErr = error as? HTTPClientError, case .httpStatus(let code, let msg) = httpErr {
+                        let isRetryable = (500...599).contains(code)
+                        let failure = ProviderFailure(
+                            providerID: providerID,
+                            statusCode: code,
+                            errorCode: code == 401 ? "unauthorized" : (code == 429 ? "rate_limited" : "http_\(code)"),
+                            message: msg ?? "HTTP \(code)",
+                            isRetryable: isRetryable,
+                            retryAfter: code == 429 ? Date().addingTimeInterval(30) : nil
+                        )
+                        continuation.yield(.failed(failure))
+                        continuation.finish(throwing: failure)
+                    } else {
+                        continuation.finish(throwing: error)
+                    }
                 }
             }
             continuation.onTermination = { @Sendable _ in

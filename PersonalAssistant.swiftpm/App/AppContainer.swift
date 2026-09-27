@@ -26,6 +26,7 @@ final class AppContainer {
 
     // AI & Transport
     let httpClient: HTTPClient
+    let modelCatalogClient: ModelCatalogClient
     let modelRouter: ModelRouter
     let assistantOrchestrator: AssistantOrchestrator
 
@@ -34,6 +35,8 @@ final class AppContainer {
     let toolPolicyEngine: ToolPolicyEngine
     let toolInvocationCoordinator: ToolInvocationCoordinator
     let approvalCoordinator: ApprovalCoordinator
+    let reminderScheduler: LocalReminderScheduler
+    let actionCoordinator: ApplicationActionCoordinator
 
     // Voice & Command Bus
     let commandBus: ApplicationCommandBus
@@ -68,13 +71,17 @@ final class AppContainer {
         let http = HTTPClient()
         self.httpClient = http
 
+        let catalogClient = ModelCatalogClient()
+        self.modelCatalogClient = catalogClient
+
         var initialProviders: [any AssistantModel] = []
         if let groqURL = URL(string: "https://api.groq.com/openai/v1") {
             let groqProvider = OpenAICompatibleProvider(
                 providerID: "groq",
                 baseURL: groqURL,
                 keychainVault: vault,
-                httpClient: http
+                httpClient: http,
+                defaultModelID: "llama-3.3-70b-versatile"
             )
             initialProviders.append(groqProvider)
         }
@@ -83,12 +90,28 @@ final class AppContainer {
                 providerID: "openRouter",
                 baseURL: openRouterURL,
                 keychainVault: vault,
-                httpClient: http
+                httpClient: http,
+                defaultModelID: "meta-llama/llama-3.3-70b-instruct"
             )
             initialProviders.append(openRouterProvider)
         }
+        let openAIProvider = OpenAIProvider(keychainVault: vault, httpClient: http)
+        initialProviders.append(openAIProvider)
 
-        let router = ModelRouter(keychainVault: vault, initialProviders: initialProviders)
+        let geminiProvider = GeminiProvider(keychainVault: vault, httpClient: http)
+        initialProviders.append(geminiProvider)
+
+        let nvidiaProvider = NvidiaNIMProvider(keychainVault: vault, httpClient: http)
+        initialProviders.append(nvidiaProvider)
+
+        let appleProvider = AppleFoundationModelProvider()
+        initialProviders.append(appleProvider)
+
+        let router = ModelRouter(
+            keychainVault: vault,
+            catalogClient: catalogClient,
+            initialProviders: initialProviders
+        )
         self.modelRouter = router
 
         self.assistantOrchestrator = AssistantOrchestrator(
@@ -109,7 +132,16 @@ final class AppContainer {
         )
         self.approvalCoordinator = ApprovalCoordinator()
 
-        let bus = ApplicationCommandBus(session: self.session, router: self.router)
+        let scheduler = LocalReminderScheduler()
+        self.reminderScheduler = scheduler
+        let actCoordinator = ApplicationActionCoordinator(
+            taskRepository: taskRepo,
+            receiptStore: receiptStore,
+            reminderScheduler: scheduler
+        )
+        self.actionCoordinator = actCoordinator
+
+        let bus = ApplicationCommandBus(session: self.session, router: self.router, actionCoordinator: actCoordinator)
         self.commandBus = bus
         self.voiceCoordinator = VoiceCoordinator(capabilityCenter: self.capabilityCenter, commandBus: bus)
 
@@ -147,6 +179,14 @@ final class AppContainer {
             session: session,
             taskRepository: taskRepository,
             router: router
+        )
+    }
+
+    func makeRemindersViewModel() -> RemindersViewModel {
+        RemindersViewModel(
+            session: session,
+            taskRepository: taskRepository,
+            reminderScheduler: reminderScheduler
         )
     }
 

@@ -16,6 +16,19 @@ actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     #endif
 
+    private var privacyMode: PrivacyMode
+    private var hasAppleSTTConsent: Bool
+
+    init(privacyMode: PrivacyMode = .privateOnly, hasAppleSTTConsent: Bool = false) {
+        self.privacyMode = privacyMode
+        self.hasAppleSTTConsent = hasAppleSTTConsent
+    }
+
+    func updatePrivacyConfiguration(privacyMode: PrivacyMode, hasAppleSTTConsent: Bool) {
+        self.privacyMode = privacyMode
+        self.hasAppleSTTConsent = hasAppleSTTConsent
+    }
+
     func startRecognition(locale: Locale) async throws -> AsyncThrowingStream<String, Error> {
         #if canImport(Speech)
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
@@ -24,6 +37,26 @@ actor LegacySpeechRecognizer: SpeechRecognizerProtocol {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+
+        if privacyMode == .privateOnly {
+            if recognizer.supportsOnDeviceRecognition {
+                request.requiresOnDeviceRecognition = true
+            } else {
+                throw AppError.unsupportedCapability("On-device speech recognition unsupported for locale in Private-Only mode")
+            }
+        } else {
+            // Cloud allowed
+            if hasAppleSTTConsent {
+                request.requiresOnDeviceRecognition = false
+            } else {
+                if recognizer.supportsOnDeviceRecognition {
+                    request.requiresOnDeviceRecognition = true
+                } else {
+                    throw AppError.privacyDenied(route: DataEgressDestination.appleSTT.rawValue, requiredClass: .sensitive)
+                }
+            }
+        }
+
         self.recognitionRequest = request
 
         return AsyncThrowingStream { continuation in

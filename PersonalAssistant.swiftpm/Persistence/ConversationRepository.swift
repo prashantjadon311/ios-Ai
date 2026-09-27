@@ -57,6 +57,9 @@ actor ConversationRepository {
         parts: [ContentPart],
         session: SessionToken
     ) async throws -> MessageRecord {
+        guard owner == session.userID else {
+            throw AppError.ownerMismatch(requested: owner, current: session.userID)
+        }
         // Fetch next sequence number
         let ownerUUID = owner.rawValue
         let convUUID = conversationID.rawValue
@@ -78,15 +81,16 @@ actor ConversationRepository {
             sequenceNumber: count
         )
         try await MainActor.run {
-            context.insert(try MessageMapper.toStored(msg))
             // Update conversation last-message
             let convDesc = FetchDescriptor<StoredConversation>(
                 predicate: #Predicate { $0.id == convUUID && $0.ownerID == ownerUUID }
             )
-            if let conv = try context.fetch(convDesc).first {
-                conv.messageCount += 1
-                conv.lastMessageAt = msg.createdAt
+            guard let conv = try context.fetch(convDesc).first else {
+                throw AppError.validationFailed(field: "conversationID", reason: "Conversation not found or not owned by caller")
             }
+            context.insert(try MessageMapper.toStored(msg))
+            conv.messageCount += 1
+            conv.lastMessageAt = msg.createdAt
             try context.save()
         }
         return msg
@@ -101,6 +105,9 @@ actor ConversationRepository {
         deltaText: String,
         session: SessionToken
     ) async throws -> MessageID {
+        guard ownerID == session.userID else {
+            throw AppError.ownerMismatch(requested: ownerID, current: session.userID)
+        }
         let convUUID = conversationID.rawValue
         let ownerUUID = ownerID.rawValue
         let traceUUID = traceID.rawValue
@@ -165,6 +172,9 @@ actor ConversationRepository {
         status: MessageStatus,
         session: SessionToken
     ) async throws {
+        guard ownerID == session.userID else {
+            throw AppError.ownerMismatch(requested: ownerID, current: session.userID)
+        }
         let traceUUID = traceID.rawValue
         let ownerUUID = ownerID.rawValue
         try await MainActor.run {
@@ -209,6 +219,9 @@ actor ConversationRepository {
         owner: UserID,
         session: SessionToken
     ) async throws {
+        guard owner == session.userID else {
+            throw AppError.ownerMismatch(requested: owner, current: session.userID)
+        }
         let convUUID = id.rawValue
         let ownerUUID = owner.rawValue
         try await MainActor.run {

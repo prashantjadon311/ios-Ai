@@ -17,17 +17,19 @@ actor TaskRepository {
 
     // MARK: - Task definitions
 
-    func taskDefinitions(ownerID: UserID) async throws -> [TaskDefinition] {
+    func taskDefinitions(ownerID: UserID, limit: Int? = nil) async throws -> [TaskDefinition] {
         let ownerUUID = ownerID.rawValue
         let stored = try await MainActor.run {
-            let descriptor = FetchDescriptor<StoredTaskDefinition>(
+            var descriptor = FetchDescriptor<StoredTaskDefinition>(
                 predicate: #Predicate { $0.ownerID == ownerUUID && !$0.isArchived },
                 sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
             )
+            if let limit {
+                descriptor.fetchLimit = limit
+            }
             return try context.fetch(descriptor)
         }
         let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
-        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
         return stored.compactMap { stored -> TaskDefinition? in
             let schedule = stored.scheduleData.flatMap { try? dec.decode(TaskSchedule.self, from: $0) }
             let recurrence = stored.recurrenceData.flatMap { try? dec.decode(TaskRecurrence.self, from: $0) }
@@ -40,6 +42,10 @@ actor TaskRepository {
                 taskDescription: stored.taskDescription,
                 schedule: schedule,
                 recurrence: recurrence,
+                projectID: stored.projectID.map { ProjectID(rawValue: $0) },
+                categoryID: stored.categoryID.map { TaskCategoryID(rawValue: $0) },
+                completionPercent: stored.completionPercent,
+                timezoneIdentifier: stored.timezoneIdentifier ?? TimeZone.current.identifier,
                 revision: stored.revision,
                 isArchived: stored.isArchived,
                 notificationIdentifiers: notifIDs,
@@ -47,6 +53,11 @@ actor TaskRepository {
                 updatedAt: stored.updatedAt
             )
         }
+    }
+
+    /// Convenience overload matching protocol requirement
+    func taskDefinitions(ownerID: UserID) async throws -> [TaskDefinition] {
+        try await taskDefinitions(ownerID: ownerID, limit: nil)
     }
 
     /// Upsert with compare-and-set revision (prevents concurrent overwrites).
@@ -65,6 +76,10 @@ actor TaskRepository {
                 existing.taskDescription = definition.taskDescription
                 existing.scheduleData = definition.schedule.flatMap { try? enc.encode($0) }
                 existing.recurrenceData = definition.recurrence.flatMap { try? enc.encode($0) }
+                existing.projectID = definition.projectID?.rawValue
+                existing.categoryID = definition.categoryID?.rawValue
+                existing.completionPercent = definition.completionPercent
+                existing.timezoneIdentifier = definition.timezoneIdentifier
                 existing.revision = definition.revision
                 existing.isArchived = definition.isArchived
                 existing.notificationIdentifiersData = (try? enc.encode(definition.notificationIdentifiers)) ?? Data()
@@ -77,6 +92,10 @@ actor TaskRepository {
                     taskDescription: definition.taskDescription,
                     scheduleData: definition.schedule.flatMap { try? enc.encode($0) },
                     recurrenceData: definition.recurrence.flatMap { try? enc.encode($0) },
+                    projectID: definition.projectID?.rawValue,
+                    categoryID: definition.categoryID?.rawValue,
+                    completionPercent: definition.completionPercent,
+                    timezoneIdentifier: definition.timezoneIdentifier,
                     revision: definition.revision,
                     isArchived: definition.isArchived,
                     notificationIdentifiersData: (try? enc.encode(definition.notificationIdentifiers)) ?? Data(),
@@ -85,6 +104,40 @@ actor TaskRepository {
                 )
                 context.insert(stored)
             }
+            try context.save()
+        }
+    }
+
+    /// Bounded query for tasks due today in the user's timezone.
+    func dueTodayTasks(ownerID: UserID, referenceDate: Date = Date(), timeZone: TimeZone = TimeZone.current, limit: Int = 20) async throws -> [TaskDefinition] {
+        let allTasks = try await taskDefinitions(ownerID: ownerID)
+        let filtered = TaskDateFilter.filterDueToday(tasks: allTasks, in: timeZone, relativeTo: referenceDate)
+        return Array(filtered.prefix(limit))
+    }
+
+    /// Bounded query for overdue tasks in the user's timezone.
+    func overdueTasks(ownerID: UserID, referenceDate: Date = Date(), timeZone: TimeZone = TimeZone.current, limit: Int = 20) async throws -> [TaskDefinition] {
+        let allTasks = try await taskDefinitions(ownerID: ownerID)
+        let filtered = TaskDateFilter.filterOverdue(tasks: allTasks, in: timeZone, relativeTo: referenceDate)
+        return Array(filtered.prefix(limit))
+    }
+
+    /// Updates manual completion percentage without modifying scheduler run execution (P07 invariant).
+    func updateCompletionPercent(taskID: TaskID, percent: Int?, expectedRevision: Int) async throws {
+        let uuid = taskID.rawValue
+        try await MainActor.run {
+            let descriptor = FetchDescriptor<StoredTaskDefinition>(
+                predicate: #Predicate { $0.id == uuid }
+            )
+            guard let stored = try context.fetch(descriptor).first else {
+                throw AppError.validationFailed(field: "taskID", reason: "Task not found")
+            }
+            guard stored.revision == expectedRevision else {
+                throw AppError.validationFailed(field: "revision", reason: "Task revision conflict")
+            }
+            stored.completionPercent = percent.map { min(100, max(0, $0)) }
+            stored.revision += 1
+            stored.updatedAt = Date()
             try context.save()
         }
     }
@@ -223,4 +276,234 @@ actor TaskRepository {
             return stored.map { Self.taskRunFromStored($0) }
         }
     }
+    // MARK: - Projects (V7 Phase P07)
+
+    func projectDefinitions(ownerID: UserID) async throws -> [ProjectDefinition] {
+        let ownerUUID = ownerID.rawValue
+        let stored = try await MainActor.run {
+            let descriptor = FetchDescriptor<StoredProjectDefinition>(
+                predicate: #Predicate { $0.ownerID == ownerUUID && !$0.isArchived },
+                sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+            )
+            return try context.fetch(descriptor)
+        }
+        return stored.map { s in
+            ProjectDefinition(
+                id: ProjectID(rawValue: s.id),
+                ownerID: UserID(rawValue: s.ownerID),
+                title: s.title,
+                projectDescription: s.projectDescription,
+                categoryID: s.categoryID.map { TaskCategoryID(rawValue: $0) },
+                colorHex: s.colorHex,
+                isArchived: s.isArchived,
+                revision: s.revision,
+                createdAt: s.createdAt,
+                updatedAt: s.updatedAt
+            )
+        }
+    }
+
+    func upsertProject(_ project: ProjectDefinition, expectedRevision: Int) async throws {
+        let id = project.id.rawValue
+        try await MainActor.run {
+            let descriptor = FetchDescriptor<StoredProjectDefinition>(
+                predicate: #Predicate { $0.id == id }
+            )
+            if let existing = try context.fetch(descriptor).first {
+                guard existing.revision == expectedRevision else {
+                    throw AppError.validationFailed(field: "revision", reason: "Project revision conflict")
+                }
+                existing.title = project.title
+                existing.projectDescription = project.projectDescription
+                existing.categoryID = project.categoryID?.rawValue
+                existing.colorHex = project.colorHex
+                existing.isArchived = project.isArchived
+                existing.revision = project.revision
+                existing.updatedAt = project.updatedAt
+            } else {
+                let stored = StoredProjectDefinition(
+                    id: id,
+                    ownerID: project.ownerID.rawValue,
+                    title: project.title,
+                    projectDescription: project.projectDescription,
+                    categoryID: project.categoryID?.rawValue,
+                    colorHex: project.colorHex,
+                    isArchived: project.isArchived,
+                    revision: project.revision,
+                    createdAt: project.createdAt,
+                    updatedAt: project.updatedAt
+                )
+                context.insert(stored)
+            }
+            try context.save()
+        }
+    }
+
+    // MARK: - Categories (V7 Phase P07)
+
+    func categories(ownerID: UserID) async throws -> [TaskCategory] {
+        let ownerUUID = ownerID.rawValue
+        let stored = try await MainActor.run {
+            let descriptor = FetchDescriptor<StoredTaskCategory>(
+                predicate: #Predicate { $0.ownerID == ownerUUID && !$0.isArchived },
+                sortBy: [SortDescriptor(\.name, order: .forward)]
+            )
+            return try context.fetch(descriptor)
+        }
+        return stored.map { s in
+            TaskCategory(
+                id: TaskCategoryID(rawValue: s.id),
+                ownerID: UserID(rawValue: s.ownerID),
+                name: s.name,
+                iconName: s.iconName,
+                colorHex: s.colorHex,
+                isArchived: s.isArchived,
+                createdAt: s.createdAt,
+                updatedAt: s.updatedAt
+            )
+        }
+    }
+
+    func upsertCategory(_ category: TaskCategory) async throws {
+        let id = category.id.rawValue
+        try await MainActor.run {
+            let descriptor = FetchDescriptor<StoredTaskCategory>(
+                predicate: #Predicate { $0.id == id }
+            )
+            if let existing = try context.fetch(descriptor).first {
+                existing.name = category.name
+                existing.iconName = category.iconName
+                existing.colorHex = category.colorHex
+                existing.isArchived = category.isArchived
+                existing.updatedAt = category.updatedAt
+            } else {
+                let stored = StoredTaskCategory(
+                    id: id,
+                    ownerID: category.ownerID.rawValue,
+                    name: category.name,
+                    iconName: category.iconName,
+                    colorHex: category.colorHex,
+                    isArchived: category.isArchived,
+                    createdAt: category.createdAt,
+                    updatedAt: category.updatedAt
+                )
+                context.insert(stored)
+            }
+            try context.save()
+        }
+    }
+
+    // MARK: - Reminders (V7 Phase P07)
+
+    func reminders(ownerID: UserID, includeCompleted: Bool = false, limit: Int? = nil) async throws -> [ReminderDefinition] {
+        let ownerUUID = ownerID.rawValue
+        let stored = try await MainActor.run {
+            var descriptor = FetchDescriptor<StoredReminderDefinition>(
+                predicate: #Predicate {
+                    $0.ownerID == ownerUUID &&
+                    !$0.isArchived &&
+                    (includeCompleted || !$0.isCompleted)
+                },
+                sortBy: [SortDescriptor(\.dueDate, order: .forward)]
+            )
+            if let limit {
+                descriptor.fetchLimit = limit
+            }
+            return try context.fetch(descriptor)
+        }
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        return stored.map { s in
+            let recurrence = s.recurrenceData.flatMap { try? dec.decode(TaskRecurrence.self, from: $0) }
+            return ReminderDefinition(
+                id: ReminderID(rawValue: s.id),
+                ownerID: UserID(rawValue: s.ownerID),
+                taskID: s.taskID.map { TaskID(rawValue: $0) },
+                title: s.title,
+                notes: s.notes,
+                dueDate: s.dueDate,
+                timezoneIdentifier: s.timezoneIdentifier,
+                categoryID: s.categoryID.map { TaskCategoryID(rawValue: $0) },
+                isCompleted: s.isCompleted,
+                completedAt: s.completedAt,
+                notificationIdentifier: s.notificationIdentifier,
+                recurrence: recurrence,
+                revision: s.revision,
+                isArchived: s.isArchived,
+                createdAt: s.createdAt,
+                updatedAt: s.updatedAt
+            )
+        }
+    }
+
+    func dueTodayReminders(ownerID: UserID, referenceDate: Date = Date(), timeZone: TimeZone = TimeZone.current, limit: Int = 20) async throws -> [ReminderDefinition] {
+        let allReminders = try await reminders(ownerID: ownerID, includeCompleted: false)
+        let filtered = TaskDateFilter.filterRemindersDueToday(reminders: allReminders, in: timeZone, relativeTo: referenceDate)
+        return Array(filtered.prefix(limit))
+    }
+
+    func upsertReminder(_ reminder: ReminderDefinition, expectedRevision: Int) async throws {
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+        let id = reminder.id.rawValue
+        try await MainActor.run {
+            let descriptor = FetchDescriptor<StoredReminderDefinition>(
+                predicate: #Predicate { $0.id == id }
+            )
+            if let existing = try context.fetch(descriptor).first {
+                guard existing.revision == expectedRevision else {
+                    throw AppError.validationFailed(field: "revision", reason: "Reminder revision conflict")
+                }
+                existing.taskID = reminder.taskID?.rawValue
+                existing.title = reminder.title
+                existing.notes = reminder.notes
+                existing.dueDate = reminder.dueDate
+                existing.timezoneIdentifier = reminder.timezoneIdentifier
+                existing.categoryID = reminder.categoryID?.rawValue
+                existing.isCompleted = reminder.isCompleted
+                existing.completedAt = reminder.completedAt
+                existing.notificationIdentifier = reminder.notificationIdentifier
+                existing.recurrenceData = reminder.recurrence.flatMap { try? enc.encode($0) }
+                existing.revision = reminder.revision
+                existing.isArchived = reminder.isArchived
+                existing.updatedAt = reminder.updatedAt
+            } else {
+                let stored = StoredReminderDefinition(
+                    id: id,
+                    ownerID: reminder.ownerID.rawValue,
+                    taskID: reminder.taskID?.rawValue,
+                    title: reminder.title,
+                    notes: reminder.notes,
+                    dueDate: reminder.dueDate,
+                    timezoneIdentifier: reminder.timezoneIdentifier,
+                    categoryID: reminder.categoryID?.rawValue,
+                    isCompleted: reminder.isCompleted,
+                    completedAt: reminder.completedAt,
+                    notificationIdentifier: reminder.notificationIdentifier,
+                    recurrenceData: reminder.recurrence.flatMap { try? enc.encode($0) },
+                    revision: reminder.revision,
+                    isArchived: reminder.isArchived,
+                    createdAt: reminder.createdAt,
+                    updatedAt: reminder.updatedAt
+                )
+                context.insert(stored)
+            }
+            try context.save()
+        }
+    }
+
+    func toggleReminderCompletion(id: ReminderID) async throws {
+        let uuid = id.rawValue
+        try await MainActor.run {
+            let descriptor = FetchDescriptor<StoredReminderDefinition>(
+                predicate: #Predicate { $0.id == uuid }
+            )
+            guard let existing = try context.fetch(descriptor).first else { return }
+            existing.isCompleted.toggle()
+            existing.completedAt = existing.isCompleted ? Date() : nil
+            existing.revision += 1
+            existing.updatedAt = Date()
+            try context.save()
+        }
+    }
 }
+
+extension TaskRepository: TaskRepositoryProtocol {}

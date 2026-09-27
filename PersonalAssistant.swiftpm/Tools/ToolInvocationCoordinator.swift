@@ -7,9 +7,9 @@ import Foundation
 
 actor ToolInvocationCoordinator {
     private let receiptStore: ToolReceiptStore
-    private let policyEngine: ToolPolicyEngine
+    private let policyEngine: (any Sendable)?
 
-    init(receiptStore: ToolReceiptStore = ToolReceiptStore(), policyEngine: ToolPolicyEngine = ToolPolicyEngine()) {
+    init(receiptStore: ToolReceiptStore = ToolReceiptStore(), policyEngine: (any Sendable)? = nil) {
         self.receiptStore = receiptStore
         self.policyEngine = policyEngine
     }
@@ -24,15 +24,24 @@ actor ToolInvocationCoordinator {
             throw AppError.approvalExpired(invocationID: authorizedCall.invocationID)
         }
 
-        // Session generation check
-        if let currentSession, currentSession.generation != authorizedCall.sessionGeneration {
-            throw AppError.sessionChanged(
-                expectedGeneration: authorizedCall.sessionGeneration,
-                currentGeneration: currentSession.generation
-            )
+        // Session and owner binding check
+        if let currentSession {
+            if currentSession.userID != authorizedCall.ownerID {
+                throw AppError.ownerMismatch(
+                    requested: authorizedCall.ownerID,
+                    current: currentSession.userID
+                )
+            }
+            if currentSession.generation != authorizedCall.sessionGeneration {
+                throw AppError.sessionChanged(
+                    expectedGeneration: authorizedCall.sessionGeneration,
+                    currentGeneration: currentSession.generation
+                )
+            }
         }
 
-        let opKey = authorizedCall.invocationID.uuidString
+        // Owner-bound idempotency key (Prompt 03 P01-B item c)
+        let opKey = "\(authorizedCall.ownerID.rawValue.uuidString):\(authorizedCall.toolID):\(authorizedCall.invocationID.uuidString)"
 
         // 0. Idempotency check: prevent duplicate execution of the same operation key
         if let existing = await receiptStore.receiptForOperationKey(opKey) {
@@ -59,13 +68,26 @@ actor ToolInvocationCoordinator {
         // 2. Perform execution with error catch
         do {
             let result = try await executor(authorizedCall.canonicalArguments)
-            await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .succeeded, result: result)
+            do {
+                try await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .succeeded, result: result)
+            } catch {
+                // If updating status to succeeded fails in durable storage, the side effect occurred
+                // but persistence failed. Must mark receipt as ambiguous and raise sideEffectAmbiguous! Never return false success!
+                try? await receiptStore.updateStatus(
+                    id: authorizedCall.invocationID,
+                    status: .ambiguous,
+                    result: "External action completed but status persistence failed: \(error.localizedDescription)"
+                )
+                throw AppError.sideEffectAmbiguous(operationKey: opKey)
+            }
             return result
         } catch is CancellationError {
-            await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .ambiguous, result: "Cancelled mid-execution")
-            throw AppError.sideEffectAmbiguous(operationKey: authorizedCall.toolID)
+            try? await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .ambiguous, result: "Cancelled mid-execution")
+            throw AppError.sideEffectAmbiguous(operationKey: opKey)
+        } catch let appErr as AppError {
+            throw appErr
         } catch {
-            await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .failed, result: error.localizedDescription)
+            try? await receiptStore.updateStatus(id: authorizedCall.invocationID, status: .failed, result: error.localizedDescription)
             throw error
         }
     }

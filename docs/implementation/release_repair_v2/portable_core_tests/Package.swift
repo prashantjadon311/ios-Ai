@@ -5,9 +5,16 @@ import PackageDescription
 
 let package = Package(
     name: "AppCorePortable",
+    platforms: [
+        .macOS(.v13)
+    ],
     products: [.library(name: "AppCorePortable", targets: ["AppCorePortable"])],
     targets: [
-        .target(name: "AppCorePortable", path: "Sources/AppCorePortable"),
+        .target(
+            name: "AppCorePortable",
+            path: "Sources/AppCorePortable",
+            swiftSettings: [.define("PORTABLE_CORE")]
+        ),
         .testTarget(name: "AppCorePortableTests", dependencies: ["AppCorePortable"])
     ]
 )

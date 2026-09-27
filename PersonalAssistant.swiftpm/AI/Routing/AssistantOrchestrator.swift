@@ -11,19 +11,22 @@ actor AssistantOrchestrator {
     private let memoryRepository: MemoryRepository
     private let auditRepository: AuditRepository
     private let router: ModelRouter
+    private let policyEngine: ToolPolicyEngine
 
     init(
         conversationRepository: ConversationRepository,
         configurationRepository: ConfigurationRepository,
         memoryRepository: MemoryRepository,
         auditRepository: AuditRepository,
-        modelRouter: ModelRouter
+        modelRouter: ModelRouter,
+        policyEngine: ToolPolicyEngine = ToolPolicyEngine()
     ) {
         self.conversationRepository = conversationRepository
         self.configurationRepository = configurationRepository
         self.memoryRepository = memoryRepository
         self.auditRepository = auditRepository
         self.router = modelRouter
+        self.policyEngine = policyEngine
     }
 
     // MARK: - Execute turn (B03/B04 pipeline)
@@ -39,13 +42,28 @@ actor AssistantOrchestrator {
 
         do {
             let configs = try await configurationRepository.providerConfigs(ownerID: ownerID)
-            let prefs = try? await configurationRepository.preferences(ownerID: ownerID)
-            let privacyMode = prefs?.privacyMode ?? .cloudAllowed
+
+            let prefs: AppPreference
+            do {
+                prefs = try await configurationRepository.preferences(ownerID: ownerID)
+            } catch let appErr as AppError {
+                // Fail-closed: Immediately emit failure and abort; 0 provider calls, 0 HTTP requests
+                await onEvent(.failed(traceID: traceID, error: appErr))
+                return
+            } catch {
+                await onEvent(.failed(traceID: traceID, error: .storageRecoveryRequired(reason: "Preference load failure: \(error.localizedDescription)")))
+                return
+            }
+
+            let maxSensitivity: PrivacyClass = request.messages.map(\.sensitivity).max() ?? .publicData
+
             let routeResult = await router.route(
                 requirements: request.requirements,
                 ownerID: ownerID,
                 configs: configs,
-                privacyMode: privacyMode
+                privacyMode: prefs.privacyMode,
+                consents: prefs.consents,
+                dataClass: maxSensitivity
             )
 
             switch routeResult {
@@ -70,6 +88,16 @@ actor AssistantOrchestrator {
 
                 var hasEmittedVisibleToken = false
 
+                let coalescer = StreamingDeltaCoalescer(flushThreshold: 128) { delta in
+                    _ = try? await self.conversationRepository.appendAssistantCheckpoint(
+                        traceID: traceID,
+                        conversationID: conversationID,
+                        ownerID: ownerID,
+                        deltaText: delta,
+                        session: session
+                    )
+                }
+
                 do {
                     let stream = try await provider.stream(routedRequest)
                     for try await event in stream {
@@ -80,17 +108,49 @@ actor AssistantOrchestrator {
                         case .textDelta(let delta, let seq):
                             hasEmittedVisibleToken = true
                             await onEvent(.textDelta(delta, sequence: seq))
+                            try? await coalescer.append(delta: delta)
 
-                            _ = try? await conversationRepository.appendAssistantCheckpoint(
-                                traceID: traceID,
-                                conversationID: conversationID,
-                                ownerID: ownerID,
-                                deltaText: delta,
-                                session: session
-                            )
-
-                        case .toolProposal:
-                            break
+                        case .toolProposal(let proposal):
+                            // Intentional validated action handoff with required approval (Contract P02, Prompt 05)
+                            do {
+                                let decision = try policyEngine.evaluate(
+                                    proposal: proposal,
+                                    ownerID: ownerID,
+                                    session: session,
+                                    privacyMode: prefs.privacyMode
+                                )
+                                switch decision {
+                                case .deny(let reason):
+                                    try? await coalescer.flush()
+                                    await onEvent(.failed(traceID: traceID, error: .toolExecutionFailed(toolID: proposal.toolID, message: reason)))
+                                    return
+                                case .ask(let approvalRequest):
+                                    await onEvent(.toolProposalPending(approvalRequest))
+                                case .permit(let authorized):
+                                    let approvalRequest = ApprovalRequest(
+                                        id: authorized.approvalID,
+                                        invocationID: authorized.invocationID,
+                                        toolID: authorized.toolID,
+                                        schemaVersion: authorized.schemaVersion,
+                                        ownerID: authorized.ownerID,
+                                        traceID: authorized.traceID,
+                                        payloadHash: authorized.payloadHash,
+                                        riskLevel: .low,
+                                        humanReadableSummary: "Permitted tool: \(authorized.toolID)",
+                                        recipient: "Local",
+                                        dataClasses: [.personal],
+                                        canonicalArguments: authorized.canonicalArguments,
+                                        sessionGeneration: authorized.sessionGeneration,
+                                        expiresAt: authorized.expiresAt,
+                                        status: .approved
+                                    )
+                                    await onEvent(.toolProposalPending(approvalRequest))
+                                }
+                            } catch {
+                                try? await coalescer.flush()
+                                await onEvent(.failed(traceID: traceID, error: .toolExecutionFailed(toolID: proposal.toolID, message: error.localizedDescription)))
+                                return
+                            }
 
                         case .usage(let input, let output, let cost):
                             let usage = UsageEstimate(
@@ -106,6 +166,7 @@ actor AssistantOrchestrator {
                             await onEvent(.usageUpdate(usage))
 
                         case .completed(let finishReason):
+                            try? await coalescer.flush()
                             _ = try? await conversationRepository.finishAssistantMessage(
                                 traceID: traceID,
                                 ownerID: ownerID,
@@ -116,6 +177,7 @@ actor AssistantOrchestrator {
                             return
 
                         case .failed(let failure):
+                            try? await coalescer.flush()
                             if hasEmittedVisibleToken {
                                 _ = try? await conversationRepository.finishAssistantMessage(
                                     traceID: traceID,
@@ -131,6 +193,7 @@ actor AssistantOrchestrator {
                         }
                     }
                 } catch is CancellationError {
+                    try? await coalescer.flush()
                     if hasEmittedVisibleToken {
                         _ = try? await conversationRepository.finishAssistantMessage(
                             traceID: traceID,
@@ -141,6 +204,7 @@ actor AssistantOrchestrator {
                     }
                     await onEvent(.interrupted(traceID: traceID, reason: "Cancelled by user"))
                 } catch {
+                    try? await coalescer.flush()
                     if hasEmittedVisibleToken {
                         _ = try? await conversationRepository.finishAssistantMessage(
                             traceID: traceID,
@@ -150,7 +214,13 @@ actor AssistantOrchestrator {
                         )
                         await onEvent(.interrupted(traceID: traceID, reason: error.localizedDescription))
                     } else {
-                        await onEvent(.failed(traceID: traceID, error: .unknown(underlying: error.localizedDescription)))
+                        if let failure = error as? ProviderFailure {
+                            await onEvent(.failed(traceID: traceID, error: .providerTransient(providerID: failure.providerID, statusCode: failure.statusCode)))
+                        } else if let appErr = error as? AppError {
+                            await onEvent(.failed(traceID: traceID, error: appErr))
+                        } else {
+                            await onEvent(.failed(traceID: traceID, error: .unknown(underlying: error.localizedDescription)))
+                        }
                     }
                 }
             }

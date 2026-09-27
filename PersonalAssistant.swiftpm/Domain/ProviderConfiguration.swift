@@ -63,6 +63,123 @@ enum ProviderKind: String, Codable, Sendable, Hashable, CaseIterable {
     case custom            // user-specified OpenAI-compatible endpoint
     case appleFoundation   // COND — gated at runtime
     case managedGateway    // NEXT — not V1
+    case openAI            // direct OpenAI API
+    case gemini            // direct Gemini API
+    case nvidia            // NVIDIA NIM OpenAI-compatible
+
+    var egressDestination: DataEgressDestination {
+        switch self {
+        case .groq:
+            return .groqAPI
+        case .openRouter:
+            return .openRouterAPI
+        case .custom:
+            return .customEndpoint
+        case .appleFoundation:
+            return .appleFoundationModel
+        case .managedGateway:
+            return .managedGateway
+        case .openAI:
+            return .openAIAPI
+        case .gemini:
+            return .geminiAPI
+        case .nvidia:
+            return .nvidiaAPI
+        }
+    }
+}
+
+// MARK: - API Key Validation (P08)
+
+enum APIKeyValidationError: Error, LocalizedError, Sendable, Equatable {
+    case empty
+    case consumerSubscriptionMistake(provider: String, detail: String)
+    case invalidFormat(provider: String, expectedPrefix: String)
+    case containsWhitespace
+
+    var errorDescription: String? {
+        switch self {
+        case .empty:
+            return "API key cannot be empty."
+        case .consumerSubscriptionMistake(let provider, let detail):
+            return "\(detail) Consumer subscriptions (like ChatGPT Plus or Gemini Advanced) do not provide API keys. A developer API key from the \(provider) developer console is required."
+        case .invalidFormat(let provider, let expectedPrefix):
+            return "Invalid key format for \(provider). Expected key starting with '\(expectedPrefix)'."
+        case .containsWhitespace:
+            return "API key must not contain whitespace."
+        }
+    }
+}
+
+struct ProviderAPIKeyValidator: Sendable {
+    static func validate(key: String, for provider: ProviderKind) -> Result<String, APIKeyValidationError> {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .failure(.empty)
+        }
+        if trimmed.contains(" ") || trimmed.contains("\t") || trimmed.contains("\n") {
+            return .failure(.containsWhitespace)
+        }
+        let lower = trimmed.lowercased()
+        if lower.contains("@") {
+            let name = provider == .gemini ? "Google Gemini" : (provider == .openAI ? "OpenAI" : provider.rawValue)
+            return .failure(.consumerSubscriptionMistake(provider: name, detail: "Email addresses cannot be used as API keys."))
+        }
+        if lower.contains("chatgpt") || lower.contains("plus") || (provider == .openAI && (lower.contains("subscriber") || lower.contains("subscription"))) {
+            return .failure(.consumerSubscriptionMistake(provider: "OpenAI", detail: "Consumer ChatGPT accounts cannot be used as API keys."))
+        }
+        if lower.contains("gemini-advanced") || lower.contains("gemini advanced") || lower.contains("google-one") || lower.contains("google one") || (provider == .gemini && (lower.contains("subscriber") || lower.contains("subscription"))) {
+            return .failure(.consumerSubscriptionMistake(provider: "Google Gemini", detail: "Google One / Gemini Advanced consumer subscriptions cannot be used as API keys."))
+        }
+
+        switch provider {
+        case .openAI:
+            guard trimmed.hasPrefix("sk-") else {
+                return .failure(.invalidFormat(provider: "OpenAI", expectedPrefix: "sk-"))
+            }
+        case .gemini:
+            guard trimmed.hasPrefix("AIzaSy") else {
+                return .failure(.invalidFormat(provider: "Gemini", expectedPrefix: "AIzaSy"))
+            }
+        case .groq:
+            guard trimmed.hasPrefix("gsk_") else {
+                return .failure(.invalidFormat(provider: "Groq", expectedPrefix: "gsk_"))
+            }
+        case .openRouter:
+            guard trimmed.hasPrefix("sk-or-") else {
+                return .failure(.invalidFormat(provider: "OpenRouter", expectedPrefix: "sk-or-"))
+            }
+        case .nvidia:
+            guard trimmed.hasPrefix("nvapi-") else {
+                return .failure(.invalidFormat(provider: "NVIDIA NIM", expectedPrefix: "nvapi-"))
+            }
+        case .custom, .appleFoundation, .managedGateway:
+            break
+        }
+
+        return .success(trimmed)
+    }
+}
+
+extension ProviderConfiguration {
+    var egressDestination: DataEgressDestination {
+        providerKind.egressDestination
+    }
+
+    var normalizedEndpointOrigin: String? {
+        guard providerKind == .custom,
+              let url = baseURL,
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https",
+              let host = url.host?.lowercased()
+        else {
+            return nil
+        }
+        if let port = url.port {
+            return "\(scheme)://\(host):\(port)"
+        }
+        return "\(scheme)://\(host)"
+    }
 }
 
 // MARK: - Model descriptor

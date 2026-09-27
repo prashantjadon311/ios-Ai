@@ -1,6 +1,6 @@
 // App/ApplicationCommandBus.swift
 // Shared typed entry points for UI and voice — prevents duplicate side effects.
-// Per V3 §App/ApplicationCommandBus.swift.
+// Per V3 §App/ApplicationCommandBus.swift and V7 Phase P02.
 
 import Foundation
 import Observation
@@ -10,6 +10,8 @@ enum AppCommand: Sendable {
     case sendMessage(conversationID: ConversationID, text: String, traceID: TraceID)
     case cancelStreaming(traceID: TraceID)
     case createTask(ownerID: UserID, title: String, description: String)
+    case createReminder(title: String, fireDate: Date, timezone: String)
+    case executeAction(ValidatedAction)
     case openConversation(ConversationID)
     case switchAssistant(AssistantID)
     case lockApp
@@ -24,13 +26,15 @@ final class ApplicationCommandBus {
 
     private let session: AppSession
     private let router: AppRouter
+    private let actionCoordinator: ApplicationActionCoordinator?
 
     // Replay guard: track recently processed trace IDs
     private var processedTraceIDs: Set<UUID> = []
 
-    init(session: AppSession, router: AppRouter) {
+    init(session: AppSession, router: AppRouter, actionCoordinator: ApplicationActionCoordinator? = nil) {
         self.session = session
         self.router = router
+        self.actionCoordinator = actionCoordinator
     }
 
     /// Dispatch a typed command. Guards against replay of the same traceID.
@@ -54,6 +58,23 @@ final class ApplicationCommandBus {
             break
         case .createTask:
             router.openTaskEditor(taskID: nil)
+        case .createReminder(let title, let fireDate, let timezone):
+            guard let token = session.sessionToken else { return }
+            let action = ValidatedAction(
+                ownerID: token.userID,
+                sessionGeneration: token.generation,
+                operationID: UUID(),
+                source: .text,
+                payload: .reminder(title: title, fireDate: fireDate, timezoneIdentifier: timezone, recurrence: nil)
+            )
+            Task {
+                _ = try? await actionCoordinator?.execute(action, in: token)
+            }
+        case .executeAction(let action):
+            guard let token = session.sessionToken else { return }
+            Task {
+                _ = try? await actionCoordinator?.execute(action, in: token)
+            }
         }
     }
 }

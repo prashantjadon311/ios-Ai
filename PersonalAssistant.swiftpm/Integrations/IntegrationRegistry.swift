@@ -10,4 +10,12 @@ struct IntegrationRegistry: Sendable {
     let remindersAdapter = RemindersAdapter()
 
     init() {}
+
+    func makeFirestoreSyncAdapter(ownerID: String) -> FirestoreSyncAdapter {
+        FirestoreSyncAdapter(activeOwnerID: ownerID, configuration: nil)
+    }
+
+    func makeDriveBackupAdapter(ownerID: String) -> DriveBackupAdapter {
+        DriveBackupAdapter(activeOwnerID: ownerID, oauthConfiguration: nil)
+    }
 }

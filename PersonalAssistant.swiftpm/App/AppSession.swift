@@ -29,6 +29,18 @@ final class AppSession {
     /// Store recovery is required — show diagnostics screen.
     private(set) var storeRecoveryRequired: Bool = false
     private(set) var storeRecoveryReason: String?
+    private var activeCancellationHandlers: [UUID: @Sendable () async -> Void] = [:]
+
+    @discardableResult
+    func registerCancellationHandler(_ handler: @escaping @Sendable () async -> Void) -> UUID {
+        let id = UUID()
+        activeCancellationHandlers[id] = handler
+        return id
+    }
+
+    func unregisterCancellationHandler(id: UUID) {
+        activeCancellationHandlers.removeValue(forKey: id)
+    }
 
     // MARK: - Dependencies
 
@@ -69,9 +81,15 @@ final class AppSession {
             } else {
                 guard let owner = profiles.first else { return }
                 let assistants = try await configurationRepository.assistantProfiles(ownerID: owner.id)
-                let prefs = (try? await configurationRepository.preferences(ownerID: owner.id))
-                    ?? AppPreference(ownerID: owner.id)
+                let prefs = try await configurationRepository.preferences(ownerID: owner.id)
                 activateProfile(owner, assistants: assistants, prefs: prefs)
+            }
+        } catch let appErr as AppError {
+            if case .storageRecoveryRequired(let reason) = appErr {
+                storeRecoveryRequired = true
+                storeRecoveryReason = reason
+            } else {
+                requiresOnboarding = true
             }
         } catch {
             requiresOnboarding = true
@@ -97,16 +115,29 @@ final class AppSession {
     func switchProfile(to targetProfile: UserProfile) async throws {
         // 1. Increment generation to invalidate old callbacks
         sessionToken = SessionToken(userID: targetProfile.id)
-        // 2. Clear caches
+        // 2. Cancel all registered in-flight work immediately
+        let handlers = Array(activeCancellationHandlers.values)
+        activeCancellationHandlers.removeAll()
+        for handler in handlers {
+            await handler()
+        }
+        // 3. Clear caches
         activeAssistant = nil
         assistantProfiles = []
         preferences = nil
         currentProfile = nil
         // 3. Load new profile
-        let assistants = try await configurationRepository.assistantProfiles(ownerID: targetProfile.id)
-        let prefs = (try? await configurationRepository.preferences(ownerID: targetProfile.id))
-            ?? AppPreference(ownerID: targetProfile.id)
-        activateProfile(targetProfile, assistants: assistants, prefs: prefs)
+        do {
+            let assistants = try await configurationRepository.assistantProfiles(ownerID: targetProfile.id)
+            let prefs = try await configurationRepository.preferences(ownerID: targetProfile.id)
+            activateProfile(targetProfile, assistants: assistants, prefs: prefs)
+        } catch let appErr as AppError {
+            if case .storageRecoveryRequired(let reason) = appErr {
+                storeRecoveryRequired = true
+                storeRecoveryReason = reason
+            }
+            throw appErr
+        }
     }
 
     // MARK: - Session capture
@@ -150,6 +181,23 @@ final class AppSession {
         next.updatedAt = Date()
         try await configurationRepository.savePreferences(next)
         preferences = next
+    }
+
+    func updateAppearanceMode(_ mode: AppearanceMode) async throws {
+        guard let owner = currentProfile else { throw AppError.notAuthenticated }
+        var next = preferences ?? AppPreference(ownerID: owner.id)
+        next.appearanceMode = mode
+        next.updatedAt = Date()
+        try await configurationRepository.savePreferences(next)
+        preferences = next
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch preferences?.appearanceMode ?? .system {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return nil
+        }
     }
 
     // MARK: - Lock
