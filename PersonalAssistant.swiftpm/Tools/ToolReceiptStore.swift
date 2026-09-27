@@ -4,13 +4,13 @@
 // Prevents duplicate side effects and reconciles ambiguous states.
 
 import Foundation
-#if canImport(SwiftData)
+#if canImport(SwiftData) && !PORTABLE_CORE
 import SwiftData
 #endif
 
 actor ToolReceiptStore {
     private var inMemoryCache: [UUID: ToolReceipt] = [:]
-    #if canImport(SwiftData)
+    #if canImport(SwiftData) && !PORTABLE_CORE
     private let modelContainer: ModelContainer?
 
     init(modelContainer: ModelContainer? = nil) {
@@ -76,7 +76,7 @@ actor ToolReceiptStore {
             updatedAt: Date()
         )
 
-        #if canImport(SwiftData)
+        #if canImport(SwiftData) && !PORTABLE_CORE
         if let modelContainer {
             do {
                 try await MainActor.run {
@@ -143,7 +143,7 @@ actor ToolReceiptStore {
             inMemoryCache[id] = cached
         }
 
-        #if canImport(SwiftData)
+        #if canImport(SwiftData) && !PORTABLE_CORE
         if let modelContainer {
             try await MainActor.run {
                 let ctx = modelContainer.mainContext
@@ -170,7 +170,7 @@ actor ToolReceiptStore {
             return cached
         }
 
-        #if canImport(SwiftData)
+        #if canImport(SwiftData) && !PORTABLE_CORE
         if let modelContainer {
             return await MainActor.run {
                 let ctx = modelContainer.mainContext
@@ -204,7 +204,7 @@ actor ToolReceiptStore {
             return cached
         }
 
-        #if canImport(SwiftData)
+        #if canImport(SwiftData) && !PORTABLE_CORE
         if let modelContainer {
             return await MainActor.run {
                 let ctx = modelContainer.mainContext
@@ -249,7 +249,7 @@ actor ToolReceiptStore {
             inMemoryCount += 1
         }
 
-        #if canImport(SwiftData)
+        #if canImport(SwiftData) && !PORTABLE_CORE
         guard let modelContainer else { return inMemoryCount }
 
         return await MainActor.run {

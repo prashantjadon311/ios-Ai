@@ -3,7 +3,6 @@
 // Per V3 §Persistence placement — only this file defines @Model classes.
 
 import Foundation
-#if canImport(SwiftData)
 import SwiftData
 
 // MARK: - Stored User Profile
@@ -461,4 +460,3 @@ final class StoredToolReceipt {
         self.updatedAt = updatedAt
     }
 }
-#endif

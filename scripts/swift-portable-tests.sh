@@ -23,7 +23,6 @@ FILES=(
     'Domain/ProviderConfiguration.swift'
     'Security/PrivacyPolicyEngine.swift'
     'Domain/ApprovalRequest.swift'
-    'Persistence/StoreModels.swift'
     'Tools/ToolReceiptStore.swift'
     'Tools/ToolInvocationCoordinator.swift'
 )
