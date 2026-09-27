@@ -186,5 +186,41 @@
   ```
   KIT_ONLY_PASS: verified 71 file SHA256; 14 skills, 12 phase packets, V5 reference ZIP integrity; original app NOT TESTED
   ```
+## 8. Gate G7 (P08: Model Providers, Local-Engine Capability Truth, Provider Catalog)
 
+- **Status:** PASS (Remote Apple CI & Portable Core Verified)
+- **Commit:** `6e63629` (`fix(providers): exhaustive toolResult switch in Gemini and separate await calls in ModelRouter`)
+- **Remote CI Results (12/12 CHECKS PASS):**
+  - `ios-real-compiler-probe` (Push Run `36352288795` / PR Run `36352291506`): SUCCESS
+    - Apple iOS App Build: 2m17s / 2m7s
+    - Mac Catalyst Build: 1m40s / 1m22s
+    - Portable Swift Core Tests: 44s / 50s
+    - Static Contract & Schema Verification: 4s / 7s
+  - `iOS Build & Verify` (Push Run `36352288779` / PR Run `36352291512`): SUCCESS
+    - Xcode iOS Build Verification: 1m46s / 1m44s
+    - Static Contract & Schema Verification: 5s / 4s
+  - PR checks: 12/12 successful on PR #2.
 
+### 8.1 Invariants Enforced
+1. **Multi-Provider Architecture & Domain Contracts:**
+   Extended `ProviderKind` with `.openAI`, `.gemini`, and `.nvidia`, and `DataEgressDestination` with `.openAIAPI`, `.geminiAPI`, and `.nvidiaAPI`. Preserved existing Groq/OpenRouter/custom credentials and identifiers.
+2. **Truthful Consumer Subscription Boundaries:**
+   Implemented `ProviderAPIKeyValidator` explicitly rejecting consumer subscription confusion (e.g. "ChatGPT Plus", "Google One / Gemini Advanced", email logins, whitespace) with clear, actionable error descriptions explaining that developer API keys are required.
+3. **Direct Adapters & Native Wire Formats:**
+   - `OpenAIProvider`: Direct OpenAI API adapter using standard chat completion wire format, default model `gpt-4o-mini`, support for tools, vision, and streaming.
+   - `NvidiaNIMProvider`: NVIDIA NIM adapter using OpenAI-compatible wire format with base URL `https://integrate.api.nvidia.com/v1`, default model `meta/llama-3.3-70b-instruct`.
+   - `GeminiProvider`: Native Google Gemini API adapter using `contents`/`parts` format, `x-goog-api-key` header, SSE streaming parsing for candidates, finish reasons, and usage metadata.
+   - `AppleFoundationModelProvider`: Honest runtime hardware and OS version capability verification (checks physical device, `arm64`, iOS 18.1+ / macOS 15.1+; rejects simulator/x86_64 with `available: false`), never routes via hidden cloud.
+4. **Dynamic Model Catalog & TTL Offline Cache:**
+   Implemented `ModelCatalogClient` with TTL expiration, stale cache fallback during network outages, and bundled `ProviderCatalog.json` fallback.
+5. **ModelRouter Warm Voice Optimization:**
+   Injected `ModelCatalogClient` into `ModelRouter` to query cached catalog first, ensuring zero HTTP network calls on warm voice turns. Enforced capability requirements (needsVision, needsTools, needsJSON), privacy mode boundaries, and HTTPS origin change consent revocation on custom endpoints.
+6. **Configuration UI Hardening:**
+   Updated `ProviderListView`, `ProviderDetailView`, and `ModelPickerView` with consumer subscription disclaimers, on-device eligibility badges, and dynamic catalog-driven model selection.
+
+### 8.2 Verification Command Evidence
+- Portable test suite: 93/93 tests PASS (added 17 tests in `ProviderContractsAndCatalogTests` and `ProviderStreamingAndErrorsTests`).
+- `scripts/swift-prepush.sh .`: PASS (196 Swift files syntax check, 93 portable tests).
+- Static contract matrix: 46/46 PASS.
+- Handoff validation: 16/16 PASS.
+- Kit integrity: 71/71 SHA-256 PASS.

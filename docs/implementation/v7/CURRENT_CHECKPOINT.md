@@ -108,5 +108,31 @@
      - `iOS Build & Verify` (Push Run `36351186543` / PR Run `36351188900`): SUCCESS (Xcode iOS Build Verification: 1m15s / 1m21s, Static: 7s / 5s)
      - PR checks: 12/12 successful on PR #2.
 
-- **Next Action:** Advance to Gate G7 (Phase P08: Model providers, local-engine capability truth, provider catalog).
+### Gate G7 (Phase P08) TDD Red-Green-Refactor Evidence:
+1. **Invariants Enforced:**
+   - **Multi-Provider Architecture & Domain Contracts:** Extended `ProviderKind` with `.openAI`, `.gemini`, and `.nvidia`, and `DataEgressDestination` with `.openAIAPI`, `.geminiAPI`, and `.nvidiaAPI`. Preserved existing Groq/OpenRouter/custom credentials and identifiers.
+   - **Truthful Consumer Subscription Boundaries:** Implemented `ProviderAPIKeyValidator` explicitly rejecting consumer subscription confusion (e.g. "ChatGPT Plus", "Google One / Gemini Advanced", email logins, whitespace) with clear, actionable error descriptions explaining that developer API keys are required.
+   - **Direct Adapters & Native Wire Formats:**
+     - `OpenAIProvider`: Direct OpenAI API adapter using standard chat completion wire format, default model `gpt-4o-mini`, support for tools, vision, and streaming.
+     - `NvidiaNIMProvider`: NVIDIA NIM adapter using OpenAI-compatible wire format with base URL `https://integrate.api.nvidia.com/v1`, default model `meta/llama-3.3-70b-instruct`.
+     - `GeminiProvider`: Native Google Gemini API adapter using `contents`/`parts` format, `x-goog-api-key` header, SSE streaming parsing for candidates, finish reasons, and usage metadata.
+     - `AppleFoundationModelProvider`: Honest runtime hardware and OS version capability verification (checks physical device, `arm64`, iOS 18.1+ / macOS 15.1+; rejects simulator/x86_64 with `available: false`), never routes via hidden cloud.
+   - **Dynamic Model Catalog & TTL Offline Cache:** Implemented `ModelCatalogClient` with TTL expiration, stale cache fallback during network outages, and bundled `ProviderCatalog.json` fallback.
+   - **ModelRouter Warm Voice Optimization:** Injected `ModelCatalogClient` into `ModelRouter` to query cached catalog first, ensuring zero HTTP network calls on warm voice turns. Enforced capability requirements (needsVision, needsTools, needsJSON), privacy mode boundaries, and HTTPS origin change consent revocation on custom endpoints.
+   - **Configuration UI Hardening:** Updated `ProviderListView`, `ProviderDetailView`, and `ModelPickerView` with consumer subscription disclaimers, on-device eligibility badges, and dynamic catalog-driven model selection.
+2. **Local TDD Evidence:**
+   - Added 17 unit tests across 2 new test suites:
+     - `ProviderContractsAndCatalogTests.swift` (10 tests)
+     - `ProviderStreamingAndErrorsTests.swift` (7 tests)
+   - Total portable test suite: 93/93 portable tests PASS.
+   - `scripts/swift-prepush.sh .`: 196 Swift files syntax check PASS, 93/93 portable tests PASS.
+   - Contracts: 16/16 handoff PASS, 46/46 matrix PASS, 71/71 kit SHA-256 PASS.
+3. **Remote CI Verified:**
+   - Commits: `19e4199` -> `6e63629` (`fix(providers): exhaustive toolResult switch in Gemini and separate await calls in ModelRouter`).
+   - Remote GitHub Actions CI Results for `6e63629`:
+     - `ios-real-compiler-probe` (Push Run `36352288795` / PR Run `36352291506`): SUCCESS (Apple iOS App Build: 2m17s / 2m7s, Catalyst: 1m40s / 1m22s, Portable Core: 44s / 50s, Static: 4s / 7s)
+     - `iOS Build & Verify` (Push Run `36352288779` / PR Run `36352291512`): SUCCESS (Xcode iOS Build Verification: 1m46s / 1m44s, Static: 5s / 4s)
+     - PR checks: 12/12 successful on PR #2.
+
+- **Next Action:** Advance to Gate G8 (Phase P07: Project/progress flow and integration hardening).
 
