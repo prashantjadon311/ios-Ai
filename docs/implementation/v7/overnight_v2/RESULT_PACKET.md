@@ -140,3 +140,51 @@
   KIT_ONLY_PASS: verified 71 file SHA256; 14 skills, 12 phase packets, V5 reference ZIP integrity; original app NOT TESTED
   ```
 
+---
+
+## 7. Gate G6 (Phase P04 & P05) Evidence Summary
+- Remote CI Commits: `2f36da2` -> `8eda827` (`fix(orchestrator): use explicit self.conversationRepository in closure`)
+- GitHub Actions Runs:
+  - `ios-real-compiler-probe` (Push Run ID `36351186563` / PR Run ID `36351188959`): SUCCESS (Apple iOS App Build: 2m3s / 1m20s, Catalyst: 1m7s / 1m29s, Portable Core: 39s / 50s, Static: 6s / 7s)
+  - `iOS Build & Verify` (Push Run ID `36351186543` / PR Run ID `36351188900`): SUCCESS (Xcode iOS Build Verification: 1m15s / 1m21s, Static: 7s / 5s)
+  - PR checks: 12/12 checks passing on Draft PR #2.
+
+### 7.1 Invariants Enforced
+1. **Approved V5 Unified Navigation Drawer:**
+   Implemented right-side drawer matching approved V5 tokens and layout in `ProfileNavigationDrawerView.swift`. Triggered exclusively by `TopRightAvatarNavButton`. Provides quick routing to Home, Conversations, Tasks & Projects, Reminders, Memory, Assistants, AI Providers, Settings, plus footer appearance switcher.
+2. **Clean Adaptive Layout:**
+   Removed bottom `TabView` on iPhone. On iPad, sidebar starts collapsed/hidden (`ipadInitialSidebar: "hidden"`).
+3. **Appearance Persistence & Semantic Palette:**
+   `session.updateAppearanceMode` persists to `ConfigurationRepository`. Semantic colors in `AppTheme.swift` map dynamic tokens (`#FCFBFE` canvas, `#A78CCF` lilac accent, `#141319` canvas, `#D2B8E9` accent, `#F5A623` amber waveform).
+4. **AIVoiceCenterVisual & Docked Composer:**
+   Central visual on `DashboardView`: soft orb in light mode, warm amber waveform in dark mode with accessibility reduce-motion support and animated wave states. Anchored bottom input composer docked above safe area.
+5. **Bounded Streaming Persistence:**
+   Authored `StreamingDeltaCoalescer` with 128-char buffering threshold. Reduces 1000 single-character deltas from 1000 SwiftData writes down to 8 flushes (99.2% database write reduction) while maintaining 100% transcript integrity and flushing upon stream completion/interruption.
+6. **Voice Synthesizer Lifecycle & Interruption Handling:**
+   `VoicePreviewSynthesizerDelegate` resets `isPlaying = false` automatically upon speech completion or cancellation. `AudioInterruptionHandler` halts speech recognition cleanly upon system audio interruptions.
+
+### 7.2 Verification Command Evidence
+- `swift test --package-path docs/implementation/release_repair_v2/portable_core_tests`:
+  ```
+  Test Suite 'All tests' passed at 2026-09-28 02:44:31.905
+  Executed 76 tests, with 0 failures (0 unexpected) in 0.152 (0.152) seconds
+  ```
+- `scripts/swift-prepush.sh .`:
+  ```
+  PORTABLE_TESTS: PASS (21 Foundation-compatible production files, plus actual tests).
+  ORIGINAL_IOS_BUILD: NOT_RUN here; Xcode/macOS CI or verified remote Mac remains authoritative.
+  ```
+- `docs/spec/v3/20_VALIDATE_HANDOFF.py`:
+  ```
+  STATIC AUDIT: 16/16 PASS
+  ```
+- `scratch/verify_matrix.py`:
+  ```
+  STATIC CONTRACT MATRIX: 46/46 CASES PASS
+  ```
+- `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/scripts/verify-kit.sh`:
+  ```
+  KIT_ONLY_PASS: verified 71 file SHA256; 14 skills, 12 phase packets, V5 reference ZIP integrity; original app NOT TESTED
+  ```
+
+

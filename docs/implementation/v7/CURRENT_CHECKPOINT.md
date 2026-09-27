@@ -1,4 +1,4 @@
-# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G5: PHASE P02/P03 COMPLETE)
+# CURRENT EXECUTION CHECKPOINT — OVERNIGHT V2 CAMPAIGN (GATE G6: PHASE P04/P05 COMPLETE)
 
 - **Active Checkpoint File:** `docs/implementation/v7/CURRENT_CHECKPOINT.md` (mutable, active execution authority)
 - **Kit Reference Checkpoint:** `docs/IOS_AI_GEMINI_V7_2_COMPLETE_KIT/evidence/CURRENT_CHECKPOINT.md` (immutable, pinned to kit manifest)
@@ -88,4 +88,25 @@
      - `iOS Build & Verify` (Push Run `36350162017` / PR Run `36350163857`): SUCCESS (Xcode iOS Build Verification: 1m56s, Static: 7s)
      - PR checks: 12/12 successful on PR #2.
 
-- **Next Action:** Advance to Gate G6 (Phase P04: Approved V5 Adaptive UI + Phase P05: Streaming / Voice / Avatar).
+### Gate G6 (Phase P04 & P05) TDD Red-Green-Refactor Evidence:
+1. **Invariants Enforced:**
+   - **Approved V5 Unified Navigation Drawer:** Implemented `ProfileNavigationDrawerView` right-hand sheet/drawer matching approved V5 tokens and layout. Accessible exclusively from `TopRightAvatarNavButton`. Provides clean destinations: Home, Conversations, Tasks & Projects, Reminders, Memory, Assistants, AI Providers, Settings, plus Appearance switcher.
+   - **Clean Mobile/iPad Adaptive Navigation:** Removed bottom `TabView` on iPhone navigation per V5 specification. On iPad, sidebar starts collapsed/hidden (`ipadInitialSidebar: "hidden"`).
+   - **Appearance Persistence & Semantic Palette:** Wired `session.updateAppearanceMode` persisting to `ConfigurationRepository`. Implemented semantic colors in `AppTheme.swift` with dynamic light/dark tokens (`#FCFBFE` canvas, `#A78CCF` lilac, `#141319` canvas, `#F5A623` warm amber).
+   - **AIVoiceCenterVisual & Docked Composer:** Implemented central visual on `DashboardView`: soft orb in light mode, warm amber waveform in dark mode with accessibility reduce-motion support and animated wave states. Anchored bottom input composer docked above safe area.
+   - **Bounded Streaming Persistence:** Authored `StreamingDeltaCoalescer` with 128-char buffering threshold. Reduces 1000 single-character deltas from 1000 SwiftData writes down to 8 flushes (99.2% database write reduction) while maintaining 100% transcript integrity and flushing upon stream completion/interruption.
+   - **Voice Synthesizer Lifecycle & Interruption Handling:** Integrated `VoicePreviewSynthesizerDelegate` to automatically reset `isPlaying = false` upon speech completion or cancellation. Wired `AudioInterruptionHandler` to cleanly halt recognition and release the microphone upon audio session interruptions.
+2. **Local TDD Evidence:**
+   - Added 12 unit tests across 3 suites: `StreamingCoalescerTests` (4 tests), `SSEDecoderTests` (5 tests), `AdaptiveNavigationAndAppearanceTests` (3 tests).
+   - Total portable test suite: 76/76 portable tests PASS.
+   - `scripts/swift-prepush.sh .`: 193 Swift files syntax check PASS, 76/76 portable tests PASS.
+   - Contracts: 16/16 handoff PASS, 46/46 matrix PASS, 71/71 kit SHA-256 PASS.
+3. **Remote CI Verified:**
+   - Commits: `2f36da2` -> `8eda827` (`fix(orchestrator): use explicit self.conversationRepository in closure`).
+   - Remote GitHub Actions CI Results for `8eda827`:
+     - `ios-real-compiler-probe` (Push Run `36351186563` / PR Run `36351188959`): SUCCESS (Apple iOS App Build: 2m3s / 1m20s, Catalyst: 1m7s / 1m29s, Portable Core: 39s / 50s, Static: 6s / 7s)
+     - `iOS Build & Verify` (Push Run `36351186543` / PR Run `36351188900`): SUCCESS (Xcode iOS Build Verification: 1m15s / 1m21s, Static: 7s / 5s)
+     - PR checks: 12/12 successful on PR #2.
+
+- **Next Action:** Advance to Gate G7 (Phase P08: Model providers, local-engine capability truth, provider catalog).
+
