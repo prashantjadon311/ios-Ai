@@ -224,3 +224,45 @@
 - Static contract matrix: 46/46 PASS.
 - Handoff validation: 16/16 PASS.
 - Kit integrity: 71/71 SHA-256 PASS.
+
+## 9. Gate G8 (P07: Project/Progress Flow and Integration Hardening)
+
+- **Status:** PASS (Remote Apple CI & Portable Core Verified)
+- **Commit:** `59df42c` (`fix(tests): sync P07 domain and task files in sync_portable_sources.py`)
+- **Remote CI Results (12/12 CHECKS PASS):**
+  - `ios-real-compiler-probe` (Push Run `36353429569` / PR Run `36353431308`): SUCCESS
+    - Apple iOS App Build: 1m35s / 2m0s
+    - Apple Swift Compiler (Mac Catalyst): 1m1s / 1m6s
+    - Portable Swift Core Tests: 55s / 51s
+    - Static Contract & Schema Verification: 5s / 6s
+  - `iOS Build & Verify` (Push Run `36353429592` / PR Run `36353431275`): SUCCESS
+    - Xcode iOS Build Verification: 1m46s / 2m12s
+    - Static Contract & Schema Verification: 6s / 5s
+  - PR checks: 12/12 successful on PR #2.
+
+### 9.1 Invariants Enforced
+1. **Real Projects, Categories, and Reminders Domain Architecture:**
+   - Defined owner-scoped `ProjectDefinition`, `TaskCategory`, and `ReminderDefinition` with stable IDs, compare-and-set revision guards, and explicit timestamps.
+   - Enhanced `TaskDefinition` with `projectID: ProjectID?`, `categoryID: TaskCategoryID?`, `completionPercent: Int?` (constrained to `0...100`), and `timezoneIdentifier: String`.
+2. **Explicit Project Progress Aggregation & Unknown Coverage Labeling:**
+   - Implemented `ProjectProgressCalculator` computing mean of known-progress tasks while explicitly tracking and labeling untracked task coverage (e.g. "3 of 4 tasks tracked (75% coverage)").
+   - Strictly enforced P07 invariant: 100% manual completion on `TaskDefinition` does NOT alter or complete scheduler occurrence runs in `StoredTaskRun`.
+3. **Timezone-Aware Due-Today and Overdue Queries Across DST:**
+   - Authored `TaskDateFilter` handling calendar day boundaries in the user's specific wall-clock timezone.
+   - Handled DST spring-forward (23-hour gap) and fall-back (25-hour overlap) days without skipping or duplicating hours.
+   - Replaced unbounded all-tasks dashboard loading with typed bounded queries (`dueTodayTasks`, `overdueTasks`, `dueTodayReminders`).
+4. **Dedicated Reminders & Projects UI & Navigation Integration:**
+   - Built dedicated `RemindersView` and `RemindersViewModel` with category pill filters, 15-minute quick snooze, and completion toggling.
+   - Connected `.reminders` in `ProfileNavigationDrawerView` and `AdaptiveLayout` directly to `RemindersView`.
+   - Built Projects view and cards in `TaskDashboardView` showing aggregated progress bars and coverage labels.
+   - Added Project and Category selectors to `TaskEditorView`.
+5. **Persistence & SwiftData Versioned Models:**
+   - Added `StoredProjectDefinition`, `StoredTaskCategory`, and `StoredReminderDefinition` to `StoreModels.swift` and registered them in `SchemaV1.swift`.
+   - Added repository methods for projects, categories, reminders, and bounded queries to `TaskRepository.swift` and `TaskRepositoryProtocol`.
+
+### 9.2 Verification Command Evidence
+- Portable test suite: 105/105 tests PASS (added 12 tests in `ProjectAndProgressTests`).
+- `scripts/swift-prepush.sh .`: PASS (201 Swift files syntax check, 105 portable tests).
+- Static contract matrix: 46/46 PASS.
+- Handoff validation: 16/16 PASS.
+- Kit integrity: 71/71 SHA-256 PASS.
