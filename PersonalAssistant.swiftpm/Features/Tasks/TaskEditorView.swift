@@ -1,5 +1,6 @@
 // Features/Tasks/TaskEditorView.swift
-// Create/edit task definition with title, description, schedule, recurrence.
+// Create/edit task definition with title, description, schedule, recurrence, project, and category.
+// Per V7 Phase P07 and V7 §§6, 3.4.
 
 import SwiftUI
 
@@ -18,6 +19,14 @@ struct TaskEditorView: View {
     @State private var hasRecurrence: Bool = false
     @State private var recurrenceFrequency: RecurrenceFrequency = .daily
     @State private var recurrenceInterval: Int = 1
+
+    @State private var projects: [ProjectDefinition] = []
+    @State private var categories: [TaskCategory] = []
+    @State private var selectedProjectID: ProjectID?
+    @State private var selectedCategoryID: TaskCategoryID?
+    @State private var hasCompletionPercent: Bool = false
+    @State private var completionPercent: Int = 0
+
     @State private var isSaving = false
     @State private var error: AppError?
 
@@ -29,6 +38,31 @@ struct TaskEditorView: View {
                 TextField("Description (optional)", text: $description, axis: .vertical)
                     .lineLimit(3...6)
                     .accessibilityLabel("Task description")
+            }
+
+            Section("Project & Category") {
+                if !projects.isEmpty {
+                    Picker("Project", selection: $selectedProjectID) {
+                        Text("None").tag(nil as ProjectID?)
+                        ForEach(projects) { p in
+                            Text(p.title).tag(p.id as ProjectID?)
+                        }
+                    }
+                }
+
+                if !categories.isEmpty {
+                    Picker("Category", selection: $selectedCategoryID) {
+                        Text("None").tag(nil as TaskCategoryID?)
+                        ForEach(categories) { c in
+                            Text(c.name).tag(c.id as TaskCategoryID?)
+                        }
+                    }
+                }
+
+                Toggle("Track Completion Progress", isOn: $hasCompletionPercent)
+                if hasCompletionPercent {
+                    Stepper("Progress: \(completionPercent)%", value: $completionPercent, in: 0...100, step: 10)
+                }
             }
 
             Section {
@@ -91,13 +125,26 @@ struct TaskEditorView: View {
     }
 
     private func loadTask() async {
-        guard let tid = taskID, let owner = session.currentProfile else { return }
+        guard let owner = session.currentProfile else { return }
         do {
-            let tasks = try await container.taskRepository.taskDefinitions(ownerID: owner.id)
-            if let task = tasks.first(where: { $0.id == tid }) {
+            async let projsTask = container.taskRepository.projectDefinitions(ownerID: owner.id)
+            async let catsTask = container.taskRepository.categories(ownerID: owner.id)
+            async let tasksTask = container.taskRepository.taskDefinitions(ownerID: owner.id)
+
+            let (p, c, tasks) = try await (projsTask, catsTask, tasksTask)
+            projects = p
+            categories = c
+
+            if let tid = taskID, let task = tasks.first(where: { $0.id == tid }) {
                 existingTask = task
                 title = task.title
                 description = task.taskDescription
+                selectedProjectID = task.projectID
+                selectedCategoryID = task.categoryID
+                if let cp = task.completionPercent {
+                    hasCompletionPercent = true
+                    completionPercent = cp
+                }
                 if let schedule = task.schedule {
                     hasSchedule = true
                     scheduleDate = schedule.fireDate
@@ -140,12 +187,18 @@ struct TaskEditorView: View {
             title: trimmedTitle,
             taskDescription: description,
             schedule: schedule,
-            recurrence: recurrence
+            recurrence: recurrence,
+            projectID: selectedProjectID,
+            categoryID: selectedCategoryID,
+            completionPercent: hasCompletionPercent ? completionPercent : nil
         )
         definition.title = trimmedTitle
         definition.taskDescription = description
         definition.schedule = schedule
         definition.recurrence = recurrence
+        definition.projectID = selectedProjectID
+        definition.categoryID = selectedCategoryID
+        definition.completionPercent = hasCompletionPercent ? completionPercent : nil
         definition.revision = expectedRev + 1
         definition.updatedAt = Date()
 

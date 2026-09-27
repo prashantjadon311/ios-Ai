@@ -182,6 +182,14 @@ final class AppContainer {
         )
     }
 
+    func makeRemindersViewModel() -> RemindersViewModel {
+        RemindersViewModel(
+            session: session,
+            taskRepository: taskRepository,
+            reminderScheduler: reminderScheduler
+        )
+    }
+
     func makeHistoryViewModel() -> HistoryViewModel {
         HistoryViewModel(
             session: session,

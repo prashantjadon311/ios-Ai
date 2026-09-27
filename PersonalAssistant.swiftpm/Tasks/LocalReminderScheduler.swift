@@ -127,6 +127,25 @@ actor LocalReminderScheduler {
         }
     }
 
+    /// Schedules a local notification for a standalone reminder (V7 Phase P07).
+    func scheduleStandaloneReminder(reminderID: ReminderID, title: String, fireDate: Date) async throws {
+        let notifID = "reminder_\(reminderID.rawValue.uuidString)"
+        try await backend.scheduleNotification(identifier: notifID, title: title, fireDate: fireDate)
+    }
+
+    /// Cancels any pending notification for a standalone reminder.
+    func cancelStandaloneReminder(reminderID: ReminderID) async {
+        let notifID = "reminder_\(reminderID.rawValue.uuidString)"
+        await backend.cancelNotifications(withIdentifiers: [notifID])
+    }
+
+    /// Snoozes a reminder by rescheduling it for a future offset in minutes.
+    func snoozeReminder(reminderID: ReminderID, title: String, minutes: Int) async throws -> Date {
+        let snoozeDate = Date().addingTimeInterval(Double(minutes * 60))
+        try await scheduleStandaloneReminder(reminderID: reminderID, title: title, fireDate: snoozeDate)
+        return snoozeDate
+    }
+
     func pendingIdentifiers() async -> [String] {
         await backend.pendingNotificationIdentifiers()
     }

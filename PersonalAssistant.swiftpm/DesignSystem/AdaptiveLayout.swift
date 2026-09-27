@@ -103,7 +103,7 @@ struct RootNavigationView: View {
         case .tasks:
             TaskDashboardView()
         case .reminders:
-            TaskDashboardView()
+            RemindersView()
         case .memory:
             MemoryBrowserView()
         case .assistants:

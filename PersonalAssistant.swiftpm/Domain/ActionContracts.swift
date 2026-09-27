@@ -114,4 +114,25 @@ struct VoiceLaunchRequest: Sendable, Hashable {
 protocol TaskRepositoryProtocol: Sendable {
     func taskDefinitions(ownerID: UserID) async throws -> [TaskDefinition]
     func upsertDefinition(_ definition: TaskDefinition, expectedRevision: Int) async throws
+    func dueTodayTasks(ownerID: UserID, referenceDate: Date, timeZone: TimeZone, limit: Int) async throws -> [TaskDefinition]
+    func overdueTasks(ownerID: UserID, referenceDate: Date, timeZone: TimeZone, limit: Int) async throws -> [TaskDefinition]
+    func projectDefinitions(ownerID: UserID) async throws -> [ProjectDefinition]
+    func upsertProject(_ project: ProjectDefinition, expectedRevision: Int) async throws
+    func categories(ownerID: UserID) async throws -> [TaskCategory]
+    func upsertCategory(_ category: TaskCategory) async throws
+    func reminders(ownerID: UserID, includeCompleted: Bool, limit: Int?) async throws -> [ReminderDefinition]
+    func dueTodayReminders(ownerID: UserID, referenceDate: Date, timeZone: TimeZone, limit: Int) async throws -> [ReminderDefinition]
+    func upsertReminder(_ reminder: ReminderDefinition, expectedRevision: Int) async throws
+}
+
+extension TaskRepositoryProtocol {
+    func dueTodayTasks(ownerID: UserID, referenceDate: Date, timeZone: TimeZone, limit: Int) async throws -> [TaskDefinition] { [] }
+    func overdueTasks(ownerID: UserID, referenceDate: Date, timeZone: TimeZone, limit: Int) async throws -> [TaskDefinition] { [] }
+    func projectDefinitions(ownerID: UserID) async throws -> [ProjectDefinition] { [] }
+    func upsertProject(_ project: ProjectDefinition, expectedRevision: Int) async throws {}
+    func categories(ownerID: UserID) async throws -> [TaskCategory] { [] }
+    func upsertCategory(_ category: TaskCategory) async throws {}
+    func reminders(ownerID: UserID, includeCompleted: Bool, limit: Int?) async throws -> [ReminderDefinition] { [] }
+    func dueTodayReminders(ownerID: UserID, referenceDate: Date, timeZone: TimeZone, limit: Int) async throws -> [ReminderDefinition] { [] }
+    func upsertReminder(_ reminder: ReminderDefinition, expectedRevision: Int) async throws {}
 }

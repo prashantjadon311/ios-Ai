@@ -16,6 +16,11 @@ struct TaskDefinition: Identifiable, Codable, Sendable, Hashable {
     var taskDescription: String
     var schedule: TaskSchedule?
     var recurrence: TaskRecurrence?
+    var projectID: ProjectID?
+    var categoryID: TaskCategoryID?
+    /// Manual completion percent in 0...100, distinct from scheduler run status (V7 Phase P07).
+    var completionPercent: Int?
+    var timezoneIdentifier: String
     /// Monotonically increasing — each edit increments revision.
     var revision: Int
     var isArchived: Bool
@@ -30,6 +35,10 @@ struct TaskDefinition: Identifiable, Codable, Sendable, Hashable {
         taskDescription: String = "",
         schedule: TaskSchedule? = nil,
         recurrence: TaskRecurrence? = nil,
+        projectID: ProjectID? = nil,
+        categoryID: TaskCategoryID? = nil,
+        completionPercent: Int? = nil,
+        timezoneIdentifier: String = TimeZone.current.identifier,
         revision: Int = 1,
         isArchived: Bool = false,
         notificationIdentifiers: [String] = [],
@@ -42,6 +51,10 @@ struct TaskDefinition: Identifiable, Codable, Sendable, Hashable {
         self.taskDescription = taskDescription
         self.schedule = schedule
         self.recurrence = recurrence
+        self.projectID = projectID
+        self.categoryID = categoryID
+        self.completionPercent = completionPercent.map { min(100, max(0, $0)) }
+        self.timezoneIdentifier = timezoneIdentifier
         self.revision = revision
         self.isArchived = isArchived
         self.notificationIdentifiers = notificationIdentifiers

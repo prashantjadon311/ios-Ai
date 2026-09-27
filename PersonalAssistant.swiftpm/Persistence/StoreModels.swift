@@ -170,6 +170,10 @@ final class StoredTaskDefinition {
     var taskDescription: String
     var scheduleData: Data?          // TaskSchedule → JSON
     var recurrenceData: Data?        // TaskRecurrence → JSON
+    var projectID: UUID?
+    var categoryID: UUID?
+    var completionPercent: Int?
+    var timezoneIdentifier: String?
     var revision: Int
     var isArchived: Bool
     var notificationIdentifiersData: Data   // [String] → JSON
@@ -178,7 +182,10 @@ final class StoredTaskDefinition {
 
     init(
         id: UUID, ownerID: UUID, title: String, taskDescription: String,
-        scheduleData: Data?, recurrenceData: Data?, revision: Int,
+        scheduleData: Data?, recurrenceData: Data?,
+        projectID: UUID? = nil, categoryID: UUID? = nil,
+        completionPercent: Int? = nil, timezoneIdentifier: String? = nil,
+        revision: Int,
         isArchived: Bool, notificationIdentifiersData: Data,
         createdAt: Date, updatedAt: Date
     ) {
@@ -188,9 +195,145 @@ final class StoredTaskDefinition {
         self.taskDescription = taskDescription
         self.scheduleData = scheduleData
         self.recurrenceData = recurrenceData
+        self.projectID = projectID
+        self.categoryID = categoryID
+        self.completionPercent = completionPercent
+        self.timezoneIdentifier = timezoneIdentifier
         self.revision = revision
         self.isArchived = isArchived
         self.notificationIdentifiersData = notificationIdentifiersData
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+// MARK: - Stored Project Definition (V7 Phase P07)
+
+@Model
+final class StoredProjectDefinition {
+    @Attribute(.unique) var id: UUID
+    var ownerID: UUID
+    var title: String
+    var projectDescription: String
+    var categoryID: UUID?
+    var colorHex: String?
+    var isArchived: Bool
+    var revision: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID,
+        ownerID: UUID,
+        title: String,
+        projectDescription: String,
+        categoryID: UUID? = nil,
+        colorHex: String? = nil,
+        isArchived: Bool = false,
+        revision: Int = 1,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.ownerID = ownerID
+        self.title = title
+        self.projectDescription = projectDescription
+        self.categoryID = categoryID
+        self.colorHex = colorHex
+        self.isArchived = isArchived
+        self.revision = revision
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+// MARK: - Stored Task Category (V7 Phase P07)
+
+@Model
+final class StoredTaskCategory {
+    @Attribute(.unique) var id: UUID
+    var ownerID: UUID
+    var name: String
+    var iconName: String?
+    var colorHex: String?
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID,
+        ownerID: UUID,
+        name: String,
+        iconName: String? = nil,
+        colorHex: String? = nil,
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.ownerID = ownerID
+        self.name = name
+        self.iconName = iconName
+        self.colorHex = colorHex
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+// MARK: - Stored Reminder Definition (V7 Phase P07)
+
+@Model
+final class StoredReminderDefinition {
+    @Attribute(.unique) var id: UUID
+    var ownerID: UUID
+    var taskID: UUID?
+    var title: String
+    var notes: String?
+    var dueDate: Date
+    var timezoneIdentifier: String
+    var categoryID: UUID?
+    var isCompleted: Bool
+    var completedAt: Date?
+    var notificationIdentifier: String?
+    var recurrenceData: Data?
+    var revision: Int
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID,
+        ownerID: UUID,
+        taskID: UUID? = nil,
+        title: String,
+        notes: String? = nil,
+        dueDate: Date,
+        timezoneIdentifier: String,
+        categoryID: UUID? = nil,
+        isCompleted: Bool = false,
+        completedAt: Date? = nil,
+        notificationIdentifier: String? = nil,
+        recurrenceData: Data? = nil,
+        revision: Int = 1,
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.ownerID = ownerID
+        self.taskID = taskID
+        self.title = title
+        self.notes = notes
+        self.dueDate = dueDate
+        self.timezoneIdentifier = timezoneIdentifier
+        self.categoryID = categoryID
+        self.isCompleted = isCompleted
+        self.completedAt = completedAt
+        self.notificationIdentifier = notificationIdentifier
+        self.recurrenceData = recurrenceData
+        self.revision = revision
+        self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
